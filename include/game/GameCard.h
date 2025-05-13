@@ -53,12 +53,14 @@ private:
     lv_obj_t* score_label;
     lv_obj_t* message_label; // For "Press to Start", "Game Over"
     lv_obj_t* instruction_label; // For scrolling instructions
+    lv_obj_t* title_label; // For the "One Button Roguelike" title
     lv_obj_t* game_tile_labels[TOTAL_DISPLAY_CELLS]; // Labels for player and environment tiles
 
     Tile tile_buffer[VISIBLE_ENVIRONMENT_TILES]; // Buffer for environment tiles data
     int player_hp;
     int player_score;
     GameState current_game_state;
+    char last_action_message[64]; // To store the message for the last action
     // player_position_index removed/repurposed as player is visually fixed and interacts with tile_buffer[0]
 
     void internal_handle_input(); // Renamed original handle_input logic

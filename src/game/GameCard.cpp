@@ -33,11 +33,13 @@ GameCard::GameCard() :
     score_label(nullptr),
     message_label(nullptr),
     instruction_label(nullptr),
+    title_label(nullptr),
     player_hp(INITIAL_PLAYER_HP),
     player_score(0),
     current_game_state(GameState::START_SCREEN)
     // player_position_index is no longer used here, player interacts with tile_buffer[0]
 {
+    last_action_message[0] = '\0'; // Initialize to empty string
     // Seed random number generator - ESP specific might be better if available
     // std::srand(std::time(0)); // Requires <ctime>
     // For ESP32, esp_random() is better. For now, let rand() be as is or fixed seed for dev.
@@ -60,6 +62,7 @@ GameCard::~GameCard() {
 void GameCard::init_game() {
     player_hp = INITIAL_PLAYER_HP;
     player_score = 0;
+    last_action_message[0] = '\0'; // Reset action message
     
     // Initialize environment tiles
     for (int i = 0; i < VISIBLE_ENVIRONMENT_TILES; ++i) {
@@ -93,6 +96,29 @@ lv_obj_t* GameCard::get_card() {
 
 void GameCard::setup_ui(lv_obj_t* parent_obj) {
     // Serial.printf("[GameCard-DEBUG] setup_ui called with parent: %p\n", parent_obj);
+    
+    // Title Label (Flashing "One Button Roguelike")
+    title_label = lv_label_create(parent_obj);
+    lv_label_set_text(title_label, "One Button Roguelike");
+    lv_obj_set_width(title_label, lv_pct(90));
+    lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
+    // Consider using a different font or size if available and desired
+    // lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
+    lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
+
+    // Flashing animation for the title
+    lv_anim_t title_anim;
+    lv_anim_init(&title_anim);
+    lv_anim_set_var(&title_anim, title_label);
+    lv_anim_set_values(&title_anim, LV_OPA_TRANSP, LV_OPA_COVER);
+    lv_anim_set_time(&title_anim, 750); // Duration of one way (e.g., 750ms to become visible)
+    lv_anim_set_playback_time(&title_anim, 750); // Duration of reverse (e.g., 750ms to become transparent)
+    lv_anim_set_repeat_count(&title_anim, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_custom_exec_cb(&title_anim, [](lv_anim_t* a, int32_t v) {
+        lv_obj_set_style_text_opa(static_cast<lv_obj_t*>(a->var), v, 0);
+    });
+    lv_anim_start(&title_anim);
     
     // Stats Container
     stats_container = lv_obj_create(parent_obj);
@@ -192,7 +218,7 @@ void GameCard::update_display() {
 }
 
 void GameCard::update_visibility() {
-    if (!stats_container || !grid_container || !message_label || !instruction_label) return;
+    if (!stats_container || !grid_container || !message_label || !instruction_label || !title_label) return;
 
     bool is_start_screen = (current_game_state == GameState::START_SCREEN);
     bool is_in_game = (current_game_state == GameState::IN_GAME);
@@ -206,13 +232,22 @@ void GameCard::update_visibility() {
     if (is_in_game) lv_obj_clear_flag(grid_container, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(grid_container, LV_OBJ_FLAG_HIDDEN);
 
-    // Message Label ("Press to Start", "Game Over")
-    if (is_start_screen || is_game_over) lv_obj_clear_flag(message_label, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(message_label, LV_OBJ_FLAG_HIDDEN);
+    // Message Label ("Press to Start", "Game Over", or Action Message)
+    // Show if on start/game over screens, or if in game and there's a message to display.
+    if (is_start_screen || is_game_over || (is_in_game && last_action_message[0] != '\0')) {
+        lv_obj_clear_flag(message_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        // Hide if in game and no message, or other states not covered.
+        lv_obj_add_flag(message_label, LV_OBJ_FLAG_HIDDEN);
+    }
 
     // Instruction Label (Scrolling)
     if (is_start_screen) lv_obj_clear_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
+
+    // Title Label ("One Button Roguelike")
+    if (is_start_screen) lv_obj_clear_flag(title_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(title_label, LV_OBJ_FLAG_HIDDEN);
 }
 
 void GameCard::render_stats() {
@@ -244,7 +279,7 @@ void GameCard::render_tiles() {
 
 void GameCard::render_message_text() { // Renamed from render_message
     if (lv_obj_has_flag(message_label, LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(instruction_label, LV_OBJ_FLAG_HIDDEN)) return;
-    if (!message_label || !instruction_label) return;
+    if (!message_label || !instruction_label) return; // instruction_label check might be redundant if only message_label matters here
 
     switch (current_game_state) {
         case GameState::START_SCREEN:
@@ -252,7 +287,11 @@ void GameCard::render_message_text() { // Renamed from render_message
             // Instruction text is set in setup_ui and visibility handled by update_visibility
             break;
         case GameState::IN_GAME:
-            // Both are hidden by update_visibility
+            if (last_action_message[0] != '\0') {
+                lv_label_set_text(message_label, last_action_message);
+            } else {
+                lv_label_set_text(message_label, ""); // Clear if no message, or message_label will be hidden by update_visibility
+            }
             break;
         case GameState::GAME_OVER:
             char game_over_msg[64];
@@ -310,20 +349,35 @@ void GameCard::resolve_current_tile() {
     if (VISIBLE_ENVIRONMENT_TILES == 0) return; // No environment tiles to interact with
 
     Tile& current_env_tile = tile_buffer[0];
+    // Clear previous message before resolving new one
+    // last_action_message[0] = '\0'; // Let's set specific messages or clear if no action.
 
     switch (current_env_tile.type) {
-        case TileType::EMPTY:   player_score += 1; break;
-        case TileType::WALL:    player_hp -= 1;    break;
+        case TileType::EMPTY:
+            player_score += 1;
+            snprintf(last_action_message, sizeof(last_action_message), "Moved. (+1 Score)");
+            break;
+        case TileType::WALL:
+            player_hp -= 1;
+            snprintf(last_action_message, sizeof(last_action_message), "Hit a wall! (-1 HP)");
+            break;
         case TileType::ENEMY_BASIC:
             player_hp -= 3;
             player_score += 5;
+            snprintf(last_action_message, sizeof(last_action_message), "Fought enemy! (-3HP,+5Pts)");
             break;
         case TileType::HEALTH_BUFF:
             player_hp = std::min(player_hp + 5, MAX_PLAYER_HP);
             player_score += 2;
+            snprintf(last_action_message, sizeof(last_action_message), "Health! (+5HP,+2Pts)");
             break;
-        case TileType::SCORE_BUFF: player_score += 25; break;
-        default: break;
+        case TileType::SCORE_BUFF:
+            player_score += 25;
+            snprintf(last_action_message, sizeof(last_action_message), "Treasure! (+25 Score)");
+            break;
+        default:
+            last_action_message[0] = '\0'; // Clear message if tile type is unknown or has no specific message
+            break;
     }
 }
 
