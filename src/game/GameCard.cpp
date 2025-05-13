@@ -27,6 +27,8 @@ const uint8_t BUTTON_INDEX_UP = 2;
 
 GameCard::GameCard() : 
     screen_container(nullptr),
+    stats_container(nullptr),
+    grid_container(nullptr),
     hp_label(nullptr),
     score_label(nullptr),
     message_label(nullptr),
@@ -76,6 +78,7 @@ lv_obj_t* GameCard::get_card() {
         lv_obj_align(screen_container, LV_ALIGN_CENTER, 0, 0);
         lv_obj_set_flex_flow(screen_container, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(screen_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_row(screen_container, 5, 0); // Add some spacing between main sections
         
         // Set dark background for the game card
         lv_obj_set_style_bg_color(screen_container, lv_color_black(), 0);
@@ -90,7 +93,9 @@ lv_obj_t* GameCard::get_card() {
 
 void GameCard::setup_ui(lv_obj_t* parent_obj) {
     // Serial.printf("[GameCard-DEBUG] setup_ui called with parent: %p\n", parent_obj);
-    lv_obj_t* stats_container = lv_obj_create(parent_obj);
+    
+    // Stats Container
+    stats_container = lv_obj_create(parent_obj);
     lv_obj_set_width(stats_container, lv_pct(95));
     lv_obj_set_height(stats_container, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(stats_container, LV_FLEX_FLOW_ROW);
@@ -107,7 +112,8 @@ void GameCard::setup_ui(lv_obj_t* parent_obj) {
     lv_label_set_text(score_label, "Score: --");
     lv_obj_set_style_text_color(score_label, lv_color_white(), 0);
 
-    lv_obj_t* grid_container = lv_obj_create(parent_obj);
+    // Game Grid Container
+    grid_container = lv_obj_create(parent_obj);
     lv_obj_set_width(grid_container, lv_pct(95));
     lv_obj_set_height(grid_container, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(grid_container, LV_FLEX_FLOW_ROW);
@@ -126,22 +132,24 @@ void GameCard::setup_ui(lv_obj_t* parent_obj) {
         // Initial text color set in render_tiles
     }
 
+    // Message Label (Start/Game Over)
     message_label = lv_label_create(parent_obj);
-    lv_label_set_text(message_label, "Press to Start");
+    lv_label_set_text(message_label, ""); // Text set in render_message_text
     lv_obj_set_width(message_label, lv_pct(90));
     lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(message_label, lv_color_white(), 0);
     lv_obj_align(message_label, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_margin_top(message_label, 5, 0);
+    // lv_obj_set_style_margin_top(message_label, 5, 0); // Margin handled by parent flexbox pad_row
 
+    // Instruction Label (Scrolling on Start Screen)
     instruction_label = lv_label_create(parent_obj);
-    lv_obj_set_width(instruction_label, lv_pct(85));
-    lv_label_set_text(instruction_label, "Player: @ | Press Center to Advance | Avoid: # (Wall, -1HP), * (Enemy, -3HP) | Collect: + (Heal), $ (Score)");
+    lv_obj_set_width(instruction_label, lv_pct(90)); 
+    lv_label_set_text(instruction_label, "Player: @ | Center:Advance | Avoid: # (Wall,-1HP) < (Enemy,-3HP) | Get: + (Heal) $ (Score)");
     lv_label_set_long_mode(instruction_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_set_style_text_align(instruction_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(instruction_label, lv_color_hex(0xCCCCCC), 0);
-    lv_obj_align(instruction_label, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_margin_top(instruction_label, 5, 0);
+    lv_obj_set_style_text_align(instruction_label, LV_TEXT_ALIGN_LEFT, 0); // Use LEFT for consistent scroll start
+    lv_obj_set_style_text_color(instruction_label, lv_color_hex(0xCCCCCC), 0); 
+    lv_obj_align(instruction_label, LV_ALIGN_CENTER, 0, 0); 
+    // lv_obj_set_style_margin_top(instruction_label, 5, 0); // Margin handled by parent flexbox pad_row
 }
 
 // Implements InputHandler interface
@@ -177,12 +185,38 @@ void GameCard::internal_handle_input() {
 
 void GameCard::update_display() {
     if (!screen_container) return;
-    render_stats();
-    render_tiles();
-    render_message();
+    update_visibility(); // Control what is shown/hidden
+    render_stats();      // Update text if visible
+    render_tiles();      // Update tiles if visible
+    render_message_text(); // Update message text if visible
+}
+
+void GameCard::update_visibility() {
+    if (!stats_container || !grid_container || !message_label || !instruction_label) return;
+
+    bool is_start_screen = (current_game_state == GameState::START_SCREEN);
+    bool is_in_game = (current_game_state == GameState::IN_GAME);
+    bool is_game_over = (current_game_state == GameState::GAME_OVER);
+
+    // Stats (HP/Score)
+    if (is_in_game || is_game_over) lv_obj_clear_flag(stats_container, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(stats_container, LV_OBJ_FLAG_HIDDEN);
+
+    // Game Grid (Tiles)
+    if (is_in_game) lv_obj_clear_flag(grid_container, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(grid_container, LV_OBJ_FLAG_HIDDEN);
+
+    // Message Label ("Press to Start", "Game Over")
+    if (is_start_screen || is_game_over) lv_obj_clear_flag(message_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(message_label, LV_OBJ_FLAG_HIDDEN);
+
+    // Instruction Label (Scrolling)
+    if (is_start_screen) lv_obj_clear_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
 }
 
 void GameCard::render_stats() {
+    if (lv_obj_has_flag(stats_container, LV_OBJ_FLAG_HIDDEN)) return;
     if (!hp_label || !score_label) return;
     char text_buffer[32];
     snprintf(text_buffer, sizeof(text_buffer), "HP: %d", player_hp);
@@ -192,13 +226,11 @@ void GameCard::render_stats() {
 }
 
 void GameCard::render_tiles() {
-    // Render Player at fixed display column
+    if (lv_obj_has_flag(grid_container, LV_OBJ_FLAG_HIDDEN)) return;
     if (game_tile_labels[PLAYER_DISPLAY_COLUMN]) {
         lv_label_set_text(game_tile_labels[PLAYER_DISPLAY_COLUMN], "@");
         lv_obj_set_style_text_color(game_tile_labels[PLAYER_DISPLAY_COLUMN], lv_color_white(), 0);
     }
-
-    // Render environment tiles
     for (int i = 0; i < VISIBLE_ENVIRONMENT_TILES; ++i) {
         int display_label_idx = PLAYER_DISPLAY_COLUMN + 1 + i;
         if (display_label_idx < TOTAL_DISPLAY_CELLS && game_tile_labels[display_label_idx]) {
@@ -210,24 +242,22 @@ void GameCard::render_tiles() {
     }
 }
 
-void GameCard::render_message() {
+void GameCard::render_message_text() { // Renamed from render_message
+    if (lv_obj_has_flag(message_label, LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(instruction_label, LV_OBJ_FLAG_HIDDEN)) return;
     if (!message_label || !instruction_label) return;
+
     switch (current_game_state) {
         case GameState::START_SCREEN:
             lv_label_set_text(message_label, "Press Center Button\nTo Start");
-            lv_obj_clear_flag(message_label, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
+            // Instruction text is set in setup_ui and visibility handled by update_visibility
             break;
         case GameState::IN_GAME:
-            lv_obj_add_flag(message_label, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
+            // Both are hidden by update_visibility
             break;
         case GameState::GAME_OVER:
             char game_over_msg[64];
             snprintf(game_over_msg, sizeof(game_over_msg), "Game Over!\nScore: %d\nPress to Restart", player_score);
             lv_label_set_text(message_label, game_over_msg);
-            lv_obj_clear_flag(message_label, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(instruction_label, LV_OBJ_FLAG_HIDDEN);
             break;
     }
 }
@@ -236,7 +266,7 @@ char GameCard::get_char_for_tile_type(TileType type) {
     switch (type) {
         case TileType::EMPTY:       return '.';
         case TileType::WALL:        return '#';
-        case TileType::ENEMY_BASIC: return '*';
+        case TileType::ENEMY_BASIC: return '<';
         case TileType::HEALTH_BUFF: return '+';
         case TileType::SCORE_BUFF:  return '$';
         default:                    return '?'; // Should not happen
