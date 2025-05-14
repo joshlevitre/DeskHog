@@ -81,7 +81,7 @@ lv_obj_t* GameCard::get_card() {
         lv_obj_align(screen_container, LV_ALIGN_CENTER, 0, 0);
         lv_obj_set_flex_flow(screen_container, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(screen_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_row(screen_container, 5, 0); // Add some spacing between main sections
+        lv_obj_set_style_pad_row(screen_container, 20, 0); // Increased spacing between main sections
         
         // Set dark background for the game card
         lv_obj_set_style_bg_color(screen_container, lv_color_black(), 0);
@@ -102,21 +102,31 @@ void GameCard::setup_ui(lv_obj_t* parent_obj) {
     lv_label_set_text(title_label, "One Button Roguelike");
     lv_obj_set_width(title_label, lv_pct(90));
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
+    // lv_obj_set_style_text_color(title_label, lv_color_white(), 0); // Original initial color
     // Consider using a different font or size if available and desired
     // lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
     lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
 
-    // Flashing animation for the title
+    // Flashing animation for the title - MODIFIED for RED/YELLOW color flash
+    lv_obj_set_style_text_opa(title_label, LV_OPA_COVER, 0); // Ensure text is always opaque
+    lv_obj_set_style_text_color(title_label, lv_palette_main(LV_PALETTE_RED), 0); // Initial color Red
+
     lv_anim_t title_anim;
     lv_anim_init(&title_anim);
     lv_anim_set_var(&title_anim, title_label);
-    lv_anim_set_values(&title_anim, LV_OPA_TRANSP, LV_OPA_COVER);
-    lv_anim_set_time(&title_anim, 750); // Duration of one way (e.g., 750ms to become visible)
-    lv_anim_set_playback_time(&title_anim, 750); // Duration of reverse (e.g., 750ms to become transparent)
+    lv_anim_set_values(&title_anim, 0, 1); // Animate between state 0 (Red) and state 1 (Yellow)
+    lv_anim_set_time(&title_anim, 750); 
+    lv_anim_set_playback_time(&title_anim, 750); 
     lv_anim_set_repeat_count(&title_anim, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_set_path_cb(&title_anim, lv_anim_path_step); // Use step path for sharp color change
+
     lv_anim_set_custom_exec_cb(&title_anim, [](lv_anim_t* a, int32_t v) {
-        lv_obj_set_style_text_opa(static_cast<lv_obj_t*>(a->var), v, 0);
+        lv_obj_t* obj = static_cast<lv_obj_t*>(a->var);
+        if (v == 0) { // State 0
+            lv_obj_set_style_text_color(obj, lv_palette_main(LV_PALETTE_RED), 0);
+        } else { // State 1
+            lv_obj_set_style_text_color(obj, lv_palette_main(LV_PALETTE_YELLOW), 0);
+        }
     });
     lv_anim_start(&title_anim);
     
@@ -364,7 +374,7 @@ void GameCard::resolve_current_tile() {
         case TileType::ENEMY_BASIC:
             player_hp -= 3;
             player_score += 5;
-            snprintf(last_action_message, sizeof(last_action_message), "Fought enemy! (-3HP,+5Pts)");
+            snprintf(last_action_message, sizeof(last_action_message), "Hit enemy! -3HP +5pts");
             break;
         case TileType::HEALTH_BUFF:
             player_hp = std::min(player_hp + 5, MAX_PLAYER_HP);
