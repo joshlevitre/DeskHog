@@ -18,9 +18,13 @@ public:
     lv_obj_t* getLvglObject() { return card_obj; }
 
 private:
+    void updateMapDisplay();    // New: Method to update only the map label
+    void updateStatsDisplay();  // New: Method to update only the stats label
+
     UltimaGame game_engine;
     lv_obj_t* card_obj; // The main LVGL object for this card
-    lv_obj_t* game_label; // LVGL label to display ASCII game view
+    lv_obj_t* map_label; // LVGL label to display ASCII game map (renamed from game_label)
+    lv_obj_t* stats_label; // LVGL label for player statistics
     lv_obj_t* message_label; // LVGL label for search messages etc.
 
     uint16_t card_width;

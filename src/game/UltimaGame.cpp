@@ -2,6 +2,14 @@
 
 UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2) {
     initializeMap();
+    initializeStats(); // Initialize player stats
+}
+
+void UltimaGame::initializeStats() {
+    hp = 100;
+    max_hp = 100;
+    level = 1;
+    xp = 0;
 }
 
 void UltimaGame::initializeMap() {
@@ -88,4 +96,13 @@ String UltimaGame::searchCurrentTile() {
         default:
             return "An unknown object.";
     }
+}
+
+String UltimaGame::getFormattedStats() {
+    String stats_str = "HP:  " + String(hp) + "/" + String(max_hp) + "\n";
+    stats_str += "LVL: " + String(level) + "\n";
+    stats_str += "XP:  " + String(xp);
+    // Add more stats here as needed, e.g., Gold, Str, Dex etc.
+    // Ensure the string fits in the allocated stats panel width.
+    return stats_str;
 } 

@@ -12,62 +12,82 @@ static unsigned long last_combo_action_time = 0;
 const unsigned long COMBO_COOLDOWN_MS = 100; // Cooldown for combo actions (milliseconds)
 
 UltimaCard::UltimaCard(uint16_t width, uint16_t height)
-    : card_obj(nullptr), game_label(nullptr), message_label(nullptr), card_width(width), card_height(height) {
+    : card_obj(nullptr), map_label(nullptr), stats_label(nullptr), message_label(nullptr), card_width(width), card_height(height) {
 }
 
 UltimaCard::~UltimaCard() {
-    if (card_obj) {
-        // lv_obj_del(card_obj); // Card's parent (CardNavigationStack) should handle deletion
-        // card_obj = nullptr;
-    }
+    // LVGL handles deletion of children when card_obj is deleted by CardNavigationStack or CardController
 }
 
 lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     card_obj = lv_obj_create(parent);
+    lv_obj_remove_style_all(card_obj); // Use this to have a clean slate for styling
     lv_obj_set_size(card_obj, card_width, card_height);
     lv_obj_set_style_bg_color(card_obj, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(card_obj, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(card_obj, 0, 0);
-    lv_obj_set_style_pad_all(card_obj, 0, 0); // No padding for the card itself
+    lv_obj_set_style_pad_all(card_obj, 2, 0); // Small padding for the overall card
     lv_obj_center(card_obj);
 
-    game_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(game_label, &lv_font_montserrat_14, 0); // Reverted to Montserrat 14 for compilation.
-                                                                    // Enable a mono font in lv_conf.h for best results.
-    lv_obj_set_style_text_color(game_label, lv_color_white(), 0);
-    lv_obj_set_width(game_label, card_width - 10); // Allow some padding within the label
-    lv_obj_set_height(game_label, card_height -10);
-    lv_label_set_long_mode(game_label, LV_LABEL_LONG_WRAP); // Wrap text if too long
-    lv_obj_align(game_label, LV_ALIGN_CENTER, 0, 0);
-    lv_label_set_text(game_label, "Initializing Ultima...\n@"); // Initial text
+    // Define approximate layout percentages/pixels
+    uint16_t message_area_height = 20; // Height for the bottom message log (1 line of Montserrat 14 + padding)
+    uint16_t main_area_height = card_height - message_area_height - 4; // -4 for card padding top/bottom
+    uint16_t stats_area_width = 70; // Fixed width for stats panel
+    uint16_t map_area_width = card_width - stats_area_width - 6; // -6 for card padding left/right & gap
 
-    // Create the message label (e.g., at the bottom of the card)
+    // Create Map Label (Left Area)
+    map_label = lv_label_create(card_obj);
+    lv_obj_set_style_text_font(map_label, &lv_font_montserrat_14, 0); 
+    lv_obj_set_style_text_color(map_label, lv_color_white(), 0);
+    lv_obj_set_size(map_label, map_area_width, main_area_height);
+    lv_label_set_long_mode(map_label, LV_LABEL_LONG_CLIP); // Clip if too long, or WRAP if preferred
+    lv_obj_align(map_label, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_label_set_text(map_label, "Loading Map...");
+
+    // Create Stats Label (Right Area)
+    stats_label = lv_label_create(card_obj);
+    lv_obj_set_style_text_font(stats_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(stats_label, lv_color_white(), 0);
+    lv_obj_set_size(stats_label, stats_area_width, main_area_height);
+    lv_label_set_long_mode(stats_label, LV_LABEL_LONG_WRAP);
+    lv_obj_align(stats_label, LV_ALIGN_TOP_RIGHT, 0, 0);
+    lv_label_set_text(stats_label, "Stats:");
+
+    // Create Message Label (Bottom Area)
     message_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(message_label, &lv_font_montserrat_14, 0); // Use same font for messages
+    lv_obj_set_style_text_font(message_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(message_label, lv_color_white(), 0);
-    lv_obj_set_width(message_label, card_width - 10); // Allow some padding
-    lv_label_set_long_mode(message_label, LV_LABEL_LONG_WRAP);
-    lv_obj_align(message_label, LV_ALIGN_BOTTOM_MID, 0, -5); // Align at bottom with a small offset
-    lv_label_set_text(message_label, ""); // Initially empty
+    lv_obj_set_size(message_label, card_width - 4, message_area_height -2); // Full width, adjusted for padding
+    lv_label_set_long_mode(message_label, LV_LABEL_LONG_SCROLL_CIRCULAR); // Or CLIP
+    lv_obj_align(message_label, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_label_set_text(message_label, "Welcome to Ultima!");
 
-    updateView();
+    updateView(); // Initial render of map and stats
     return card_obj;
 }
 
-void UltimaCard::updateView() {
-    if (game_label) {
+void UltimaCard::updateMapDisplay() {
+    if (map_label) {
         String view = game_engine.renderView();
-        lv_label_set_text(game_label, view.c_str());
+        lv_label_set_text(map_label, view.c_str());
     }
-    // Clear message label on general view update if desired, or handle timeouts separately
-    // if (message_label) {
-    //     lv_label_set_text(message_label, "");
-    // }
+}
+
+void UltimaCard::updateStatsDisplay() {
+    if (stats_label) {
+        String stats = game_engine.getFormattedStats();
+        lv_label_set_text(stats_label, stats.c_str());
+    }
+}
+
+void UltimaCard::updateView() {
+    updateMapDisplay();
+    updateStatsDisplay();
+    // Message label is updated by actions, not typically here unless clearing it.
 }
 
 bool UltimaCard::handleButtonPress(uint8_t button_index) {
     bool handled = false;
-    String msg = ""; 
+    String msg_text = ""; // Renamed from 'msg' to avoid conflict 
     unsigned long current_time_ms = millis();
 
     bool up_currently_pressed = Input::isUpPressed();
@@ -78,47 +98,48 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
     if (center_currently_pressed && up_currently_pressed) {
         if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) {
             game_engine.movePlayer(1, 0); // Move Right
-            updateView();
-            // lv_label_set_text(message_label, "Right (C+U)"); // Optional: for debugging combos
-            lv_label_set_text(message_label, ""); // Clear message on move
+            updateMapDisplay(); // Only update map, stats don't change on move
+            msg_text = "Moved Right."; 
             last_combo_action_time = current_time_ms;
         }
-        handled = true; // A combo is active, consume the event from CardNavigationStack
+        handled = true; 
     } else if (center_currently_pressed && down_currently_pressed) {
         if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) {
             game_engine.movePlayer(-1, 0); // Move Left
-            updateView();
-            // lv_label_set_text(message_label, "Left (C+D)"); // Optional: for debugging combos
-            lv_label_set_text(message_label, ""); // Clear message on move
+            updateMapDisplay(); // Only update map
+            msg_text = "Moved Left.";
             last_combo_action_time = current_time_ms;
         }
-        handled = true; // A combo is active, consume the event from CardNavigationStack
+        handled = true; 
     }
 
-    // Priority 2: Process individual button actions IF NO COMBO WAS HANDLED/ACTIVE
-    if (!handled) { // Only process if no combo keys are actively pressed together
+    if (!handled) {
         switch (button_index) {
             case Input::BUTTON_UP:
-                game_engine.movePlayer(0, -1); // Move Up (decreasing Y)
-                updateView();
-                lv_label_set_text(message_label, ""); // Clear message on move
+                game_engine.movePlayer(0, -1); // Move Up
+                updateMapDisplay();
+                msg_text = "Moved Up.";
                 handled = true;
                 break;
             case Input::BUTTON_DOWN:
-                game_engine.movePlayer(0, 1);  // Move Down (increasing Y)
-                updateView();
-                lv_label_set_text(message_label, ""); // Clear message on move
+                game_engine.movePlayer(0, 1);  // Move Down
+                updateMapDisplay();
+                msg_text = "Moved Down.";
                 handled = true;
                 break;
             case Input::BUTTON_CENTER:
-                msg = game_engine.searchCurrentTile();
-                if (message_label) {
-                    lv_label_set_text(message_label, msg.c_str());
-                }
-                // updateView(); // No need to update the whole map view for a search action
+                msg_text = game_engine.searchCurrentTile();
+                // Stats might change from a search/action in future, so full updateView for now is safer
+                // updateView(); // Or just updateMapDisplay if search has no other side effects
                 handled = true; 
                 break;
         }
     }
+
+    if (message_label && !msg_text.isEmpty()) {
+        lv_label_set_text(message_label, msg_text.c_str());
+    }
+    // Consider clearing message_label after a delay or on next *different* action if it gets too cluttered.
+
     return handled;
 } 
