@@ -13,6 +13,7 @@ public:
     NeoPixelController();
     void begin();
     void update();
+    void blinkLight(int times, int delay_ms);
 
 private:
     static constexpr uint8_t NUM_PIXELS = 1;

@@ -59,4 +59,20 @@ void NeoPixelController::update() {
     
     leds[0] = CRGB(finalRed, finalGreen, finalBlue); // Set pixel color using FastLED
     FastLED.show(); // Update the strip
+}
+
+void NeoPixelController::blinkLight(int times, int delay_ms) {
+    CRGB colors[] = {CRGB::Blue, CRGB::DeepPink, CRGB::Orange};
+    int num_colors = sizeof(colors) / sizeof(colors[0]);
+
+    for (int i = 0; i < times; ++i) {
+        for (int j = 0; j < num_colors; ++j) {
+            leds[0] = colors[j]; // Set to current color in sequence
+            FastLED.show();
+            delay(delay_ms);
+            leds[0] = CRGB::Black; // Turn off the light
+            FastLED.show();
+            delay(delay_ms);
+        }
+    }
 } 
