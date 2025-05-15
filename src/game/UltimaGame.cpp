@@ -1,16 +1,5 @@
 #include "UltimaGame.h"
 
-// Define color strings for LVGL recoloring (LVGL v8+ syntax)
-// Note: The space after the hex code is removed, it should be part of the text or not present if only one char.
-// The format is "#RRGGBB TextToColor#"
-const char* LV_COLOR_PLAYER_STR = "#FFFFFF"; // White
-const char* LV_COLOR_WALL_STR   = "#808080"; // Grey
-const char* LV_COLOR_FLOOR_STR  = "#228B22"; // ForestGreen
-const char* LV_COLOR_TREE_STR   = "#32CD32"; // LimeGreen
-const char* LV_COLOR_ROCK_STR   = "#A0522D"; // Sienna
-const char* LV_COLOR_WATER_STR  = "#1E90FF"; // DodgerBlue
-const char* LV_COLOR_DEFAULT_STR= "#303030"; // Dark Grey for empty space / out of bounds
-
 UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2) {
     initializeMap();
 }
@@ -58,6 +47,7 @@ void UltimaGame::movePlayer(int dx, int dy) {
 
 String UltimaGame::renderView() {
     String view_str = "";
+    // Calculate the top-left corner of the view relative to the map
     int view_start_x = player_x - VIEW_WIDTH / 2;
     int view_start_y = player_y - VIEW_HEIGHT / 2;
 
@@ -65,37 +55,18 @@ String UltimaGame::renderView() {
         for (int x_offset = 0; x_offset < VIEW_WIDTH; ++x_offset) {
             int map_render_x = view_start_x + x_offset;
             int map_render_y = view_start_y + y_offset;
-            
-            char current_char_on_map = ' '; 
-            bool is_player_pos = (map_render_x == player_x && map_render_y == player_y);
 
-            if (is_player_pos) {
-                view_str += LV_COLOR_PLAYER_STR;
-                view_str += "@";
-                view_str += "#"; // End color marker
+            if (map_render_x == player_x && map_render_y == player_y) {
+                view_str += '@';
             } else if (map_render_x >= 0 && map_render_x < MAP_WIDTH &&
                        map_render_y >= 0 && map_render_y < MAP_HEIGHT) {
-                current_char_on_map = game_map[map_render_y][map_render_x];
-                String color_prefix;
-                switch (current_char_on_map) {
-                    case '#': color_prefix = LV_COLOR_WALL_STR; break;
-                    case '.': color_prefix = LV_COLOR_FLOOR_STR; break;
-                    case 'T': color_prefix = LV_COLOR_TREE_STR; break;
-                    case 'R': color_prefix = LV_COLOR_ROCK_STR; break;
-                    case '~': color_prefix = LV_COLOR_WATER_STR; break;
-                    default: color_prefix = LV_COLOR_DEFAULT_STR; break;
-                }
-                view_str += color_prefix;
-                view_str += current_char_on_map;
-                view_str += "#"; // End color marker
+                view_str += game_map[map_render_y][map_render_x];
             } else {
-                view_str += LV_COLOR_DEFAULT_STR;
-                view_str += " "; 
-                view_str += "#"; // End color marker
+                view_str += ' '; // Out of map bounds, show empty space
             }
         }
         if (y_offset < VIEW_HEIGHT - 1) {
-             view_str += "\n";
+             view_str += "\n"; // Newline for each row except the last
         }
     }
     return view_str;

@@ -32,11 +32,9 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     lv_obj_center(card_obj);
 
     game_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(game_label, &lv_font_unscii_8, 0); // Using unscii_8. ENABLE IN lv_conf.h!
-    // lv_obj_set_style_text_color(game_label, lv_color_white(), 0); // Base color, will be overridden by inline colors
-    // lv_label_set_recolor(game_label, true); // Previous attempt
-    // lv_obj_set_style_text_recolor(game_label, true, 0); // Alternative v9 style setter
-    // lv_obj_add_flag(game_label, LV_OBJ_FLAG_RECOLOR); // Commented out to allow compilation due to undeclared errors
+    lv_obj_set_style_text_font(game_label, &lv_font_montserrat_14, 0); // Reverted to Montserrat 14 for compilation.
+                                                                    // Enable a mono font in lv_conf.h for best results.
+    lv_obj_set_style_text_color(game_label, lv_color_white(), 0);
     lv_obj_set_width(game_label, card_width - 10); // Allow some padding within the label
     lv_obj_set_height(game_label, card_height -10);
     lv_label_set_long_mode(game_label, LV_LABEL_LONG_WRAP); // Wrap text if too long
@@ -45,8 +43,8 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
 
     // Create the message label (e.g., at the bottom of the card)
     message_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(message_label, &lv_font_unscii_8, 0); // Use same font for messages
-    lv_obj_set_style_text_color(message_label, lv_color_white(), 0); // Messages are white by default
+    lv_obj_set_style_text_font(message_label, &lv_font_montserrat_14, 0); // Use same font for messages
+    lv_obj_set_style_text_color(message_label, lv_color_white(), 0);
     lv_obj_set_width(message_label, card_width - 10); // Allow some padding
     lv_label_set_long_mode(message_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(message_label, LV_ALIGN_BOTTOM_MID, 0, -5); // Align at bottom with a small offset
@@ -58,13 +56,13 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
 
 void UltimaCard::updateView() {
     if (game_label) {
-        // Render clear ground for the entire game area
-        String view = "";
-        for (int i = 0; i < 10; ++i) { // Adjust the number of lines as needed
-            view += "The ground is clear.\n";
-        }
+        String view = game_engine.renderView();
         lv_label_set_text(game_label, view.c_str());
     }
+    // Clear message label on general view update if desired, or handle timeouts separately
+    // if (message_label) {
+    //     lv_label_set_text(message_label, "");
+    // }
 }
 
 bool UltimaCard::handleButtonPress(uint8_t button_index) {

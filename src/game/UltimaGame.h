@@ -5,8 +5,8 @@
 
 #define MAP_WIDTH 20
 #define MAP_HEIGHT 15
-#define VIEW_WIDTH 24
-#define VIEW_HEIGHT 12
+#define VIEW_WIDTH 20
+#define VIEW_HEIGHT 8
 
 class UltimaGame {
 public:
