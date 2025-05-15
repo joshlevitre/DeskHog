@@ -19,12 +19,17 @@ const uint32_t PomodoroCard::RAINBOW_COLORS[] = {
 };
 const size_t PomodoroCard::RAINBOW_COLORS_COUNT = sizeof(PomodoroCard::RAINBOW_COLORS) / sizeof(PomodoroCard::RAINBOW_COLORS[0]);
 
+// Define static members for mode-specific background colors
+const lv_color_t PomodoroCard::WORK_BG_COLOR = lv_color_hex(0xE07A5F); // Desaturated Orange/Red (Terracotta/Coral)
+const lv_color_t PomodoroCard::BREAK_BG_COLOR = lv_color_hex(0x3A5A7A); // Desaturated Blue
+
 PomodoroCard::PomodoroCard(lv_obj_t* parent)
     : _card(nullptr)
     , _background(nullptr)
     , _label(nullptr)
     , _label_shadow(nullptr)
     , _tally_label(nullptr)
+    , _progress_arc(nullptr)
     , _timer(nullptr)
     , _effects_timer(nullptr)
     , _is_running(false)
@@ -50,17 +55,33 @@ PomodoroCard::PomodoroCard(lv_obj_t* parent)
     
     // Make background container fill parent completely
     lv_obj_set_style_radius(_background, 8, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(_background, lv_color_hex(0x4A4A4A), 0); // Dark gray background
+    lv_obj_set_style_bg_color(_background, WORK_BG_COLOR, 0); // Initial color: work mode
     lv_obj_set_style_border_width(_background, 0, 0);
     lv_obj_set_style_pad_all(_background, 5, 0);
     
     lv_obj_set_width(_background, lv_pct(100));
     lv_obj_set_height(_background, lv_pct(100));
     
+    // Create circular progress bar (arc)
+    _progress_arc = lv_arc_create(_background);
+    if (_progress_arc) {
+        lv_obj_set_size(_progress_arc, 95, 95); // Adjust size as needed
+        lv_obj_align(_progress_arc, LV_ALIGN_CENTER, 0, 0);
+        lv_arc_set_rotation(_progress_arc, 270); // Start at 12 o'clock
+        lv_arc_set_bg_angles(_progress_arc, 0, 360);
+        lv_arc_set_value(_progress_arc, 100); // Initial value (full)
+        lv_obj_remove_style(_progress_arc, NULL, LV_PART_KNOB); // No knob
+        lv_obj_set_style_arc_width(_progress_arc, 8, LV_PART_MAIN); // Track width
+        lv_obj_set_style_arc_color(_progress_arc, lv_color_hex(0x303030), LV_PART_MAIN); // Track color (darker gray)
+        lv_obj_set_style_arc_width(_progress_arc, 8, LV_PART_INDICATOR); // Indicator width
+        lv_obj_set_style_arc_color(_progress_arc, lv_color_white(), LV_PART_INDICATOR); // Indicator color (white)
+        lv_obj_move_background(_progress_arc); // Ensure it's behind labels
+    }
+    
     // Create shadow label (black, 1px offset)
     _label_shadow = lv_label_create(_background);
     if (_label_shadow) {
-        lv_obj_set_style_text_font(_label_shadow, Style::largeValueFont(), 0);
+        lv_obj_set_style_text_font(_label_shadow, Style::loudNoisesFont(), 0);
         lv_obj_set_style_text_color(_label_shadow, lv_color_black(), 0);
         lv_obj_align(_label_shadow, LV_ALIGN_CENTER, 0, 1);
     }
@@ -68,7 +89,7 @@ PomodoroCard::PomodoroCard(lv_obj_t* parent)
     // Create main label (white, no shadow offset)
     _label = lv_label_create(_background);
     if (_label) {
-        lv_obj_set_style_text_font(_label, Style::largeValueFont(), 0);
+        lv_obj_set_style_text_font(_label, Style::loudNoisesFont(), 0);
         lv_obj_set_style_text_color(_label, lv_color_white(), 0);
         lv_obj_align(_label, LV_ALIGN_CENTER, 0, 0);
     }
@@ -84,6 +105,10 @@ PomodoroCard::PomodoroCard(lv_obj_t* parent)
     // Initialize display (including tally)
     updateDisplay();
     updateTallyDisplay();
+
+    if (neoPixelController) {
+        neoPixelController->setLedState(NeoPixelController::LedState::IDLE);
+    }
 }
 
 PomodoroCard::~PomodoroCard() {
@@ -105,33 +130,50 @@ PomodoroCard::~PomodoroCard() {
         _label = nullptr;
         _label_shadow = nullptr;
         _tally_label = nullptr;
+        _progress_arc = nullptr;
     }
 }
 
 void PomodoroCard::updateDisplay() {
     if (!_label || !_label_shadow) return;
-    
+
     if (_is_running) {
         _remaining_seconds--;
-        if (_remaining_seconds <= 0) {
-            stopTimer();
+        if (_remaining_seconds < 0) { 
+            stopTimer(); 
             switchMode();
 
-            // Schedule effects to run after a short delay, allowing UI to update
             Serial.println("Timer expired. Scheduling effects.");
-            // Ensure no old effects_timer is lingering if stopTimer wasn't perfectly timed (defensive)
             if (_effects_timer) {
                 lv_timer_del(_effects_timer);
                 _effects_timer = nullptr;
             }
-            _effects_timer = lv_timer_create(effects_timer_cb, 100, this); // 100ms delay
-            lv_timer_set_repeat_count(_effects_timer, 1); // Make it a one-shot timer
+            _effects_timer = lv_timer_create(effects_timer_cb, 100, this);
+            lv_timer_set_repeat_count(_effects_timer, 1);
             
-            return; // Return from this updateDisplay. The label should now show the reset time.
+            int minutes_after_switch = _remaining_seconds / 60; 
+            int seconds_after_switch = _remaining_seconds % 60;
+            char time_str_after_switch[6];
+            snprintf(time_str_after_switch, sizeof(time_str_after_switch), "%02d:%02d", minutes_after_switch, seconds_after_switch);
+            lv_label_set_text(_label, time_str_after_switch);
+            lv_label_set_text(_label_shadow, time_str_after_switch);
+
+            if (_progress_arc) {
+                 lv_arc_set_value(_progress_arc, 100);
+            }
+            return; 
         }
     }
     
-    // Format time as MM:SS
+    if (_progress_arc) {
+        int total_seconds_in_mode = _is_work_mode ? WORK_TIME : BREAK_TIME;
+        if (total_seconds_in_mode == 0) total_seconds_in_mode = 1; 
+
+        int16_t progress_percent = (_remaining_seconds >= 0) ? 
+                                   (int16_t)((_remaining_seconds / (float)total_seconds_in_mode) * 100) : 0;
+        lv_arc_set_value(_progress_arc, progress_percent);
+    }
+    
     int minutes = _remaining_seconds / 60;
     int seconds = _remaining_seconds % 60;
     char time_str[6];
@@ -139,16 +181,27 @@ void PomodoroCard::updateDisplay() {
     
     lv_label_set_text(_label, time_str);
     lv_label_set_text(_label_shadow, time_str);
+
+    if (!_is_running && _background) {
+        lv_color_t current_mode_bg_color = _is_work_mode ? WORK_BG_COLOR : BREAK_BG_COLOR;
+        lv_obj_set_style_bg_color(_background, current_mode_bg_color, 0);
+    }
 }
 
 void PomodoroCard::startTimer() {
     if (_is_running) return;
     
     _is_running = true;
+    updateDisplay(); 
+
+    if (neoPixelController) {
+        neoPixelController->setLedState(_is_work_mode ? NeoPixelController::LedState::WORK : NeoPixelController::LedState::BREAK);
+    }
+
     if (!_timer) {
         _timer = lv_timer_create([](lv_timer_t* timer) {
             auto* card = static_cast<PomodoroCard*>(lv_timer_get_user_data(timer));
-            card->updateDisplay();
+            if (card) card->updateDisplay(); // Add null check for safety
         }, 1000, this);  // Update every second
     }
 }
@@ -159,9 +212,12 @@ void PomodoroCard::stopTimer() {
         lv_timer_del(_timer);
         _timer = nullptr;
     }
-    if (_effects_timer) { // If effects were scheduled, cancel them
+    if (_effects_timer) { 
         lv_timer_del(_effects_timer);
         _effects_timer = nullptr;
+    }
+    if (neoPixelController) {
+        neoPixelController->setLedState(NeoPixelController::LedState::IDLE);
     }
 }
 
@@ -175,9 +231,19 @@ void PomodoroCard::anim_set_bg_color_cb(void * var, int32_t v) {
 
 // Animation ready callback to restore original background color
 void PomodoroCard::anim_ready_cb_restore_color(lv_anim_t *a) {
-    lv_obj_t* obj = static_cast<lv_obj_t*>(a->var); // Get the animated object
-    if (obj) {
-        lv_obj_set_style_bg_color(obj, lv_color_hex(0x4A4A4A), 0); // Restore dark gray background
+    PomodoroCard* card = static_cast<PomodoroCard*>(a->user_data);
+    if (card && card->_background) { // Ensure card and its background are valid
+        lv_color_t restore_color = card->_is_work_mode ? WORK_BG_COLOR : BREAK_BG_COLOR;
+        lv_obj_set_style_bg_color(card->_background, restore_color, 0);
+    } else {
+        // Fallback: if user_data is not set or card is invalid, try to use a default
+        // This might happen if the animation is somehow triggered without proper setup.
+        lv_obj_t* obj = static_cast<lv_obj_t*>(a->var); // Get the animated object (background)
+        if (obj) {
+             // We don't know the mode here, so default to WORK_BG_COLOR or a neutral color.
+             // However, with user_data, this path should ideally not be taken.
+            lv_obj_set_style_bg_color(obj, WORK_BG_COLOR, 0); 
+        }
     }
 }
 
@@ -187,6 +253,7 @@ void PomodoroCard::flashRainbow() {
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, _background);
+    lv_anim_set_user_data(&a, this); // Pass PomodoroCard instance
     lv_anim_set_exec_cb(&a, anim_set_bg_color_cb); // Use the custom callback
     lv_anim_set_values(&a, 0, RAINBOW_COLORS_COUNT - 1); // Animate through indices of RAINBOW_COLORS
     lv_anim_set_time(&a, 2000);  // 2 seconds for full rainbow cycle
@@ -203,7 +270,20 @@ void PomodoroCard::switchMode() {
     }
     _is_work_mode = !_is_work_mode;
     _remaining_seconds = _is_work_mode ? WORK_TIME : BREAK_TIME;
+
+    if (_background) { 
+        lv_color_t new_bg_color = _is_work_mode ? WORK_BG_COLOR : BREAK_BG_COLOR;
+        lv_obj_set_style_bg_color(_background, new_bg_color, 0);
+    }
+
+    if (_progress_arc) {
+        lv_arc_set_value(_progress_arc, 100);
+    }
     updateDisplay();
+
+    if (_is_running && neoPixelController) {
+         neoPixelController->setLedState(_is_work_mode ? NeoPixelController::LedState::WORK : NeoPixelController::LedState::BREAK);
+    }
 }
 
 bool PomodoroCard::handleButtonPress(uint8_t button_index) {
@@ -234,10 +314,16 @@ void PomodoroCard::effects_timer_cb(lv_timer_t* timer) {
 }
 
 void PomodoroCard::executePostTimerEffects() {
-    Serial.println("Executing post-timer effects. Flashing rainbow.");
-    flashRainbow();
-    Serial.println("Flashing light.");
-    // neoPixelController->blinkLight(3, 500); // This still contains blocking delay() calls
+    Serial.println("Executing post-timer effects. Flashing rainbow (screen).");
+    flashRainbow(); // Screen effect
+    
+    Serial.println("Blinking NeoPixel.");
+    if (neoPixelController) {
+        neoPixelController->blinkLight(2, 250); // Blink 2 times, 250ms on, 250ms off for each color in sequence
+    }
+
+    // Timer will be started for the new mode by the effects_timer_cb after this function returns
+    // and startTimer will set the correct WORK/BREAK LED state.
 }
 
 void PomodoroCard::updateTallyDisplay() {

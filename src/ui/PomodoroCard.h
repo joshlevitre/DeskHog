@@ -31,6 +31,7 @@ private:
     lv_obj_t* _label;
     lv_obj_t* _label_shadow;
     lv_obj_t* _tally_label;      // Label for the tally marks
+    lv_obj_t* _progress_arc;     // Circular progress bar
     lv_timer_t* _timer;
     lv_timer_t* _effects_timer; // For one-shot effects
 
@@ -39,10 +40,14 @@ private:
     bool _is_work_mode;  // true for work (25min), false for break (5min)
     int _remaining_seconds;
     int _completed_work_sessions; // Counter for completed work sessions
-    static constexpr int WORK_TIME = 25;    // 25 seconds for testing
-    static constexpr int BREAK_TIME = 5;    // 5 seconds for testing
+    static constexpr int WORK_TIME = 25;    // 25 seconds for testing // TODO: Change to 25 * 60
+    static constexpr int BREAK_TIME = 5;    // 5 seconds for testing // TODO: Change to 5 * 60
 
     // Static color definitions for rainbow effect
     static const uint32_t RAINBOW_COLORS[];
     static const size_t RAINBOW_COLORS_COUNT;
+
+    // Background colors for different modes
+    static const lv_color_t WORK_BG_COLOR;
+    static const lv_color_t BREAK_BG_COLOR;
 }; 
