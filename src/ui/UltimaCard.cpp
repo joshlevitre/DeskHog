@@ -25,8 +25,10 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     card_obj = lv_obj_create(parent);
     lv_obj_remove_style_all(card_obj); // Use this to have a clean slate for styling
     lv_obj_set_size(card_obj, card_width, card_height);
-    lv_obj_set_style_bg_color(card_obj, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(card_obj, lv_color_black(), 0); // Black background
     lv_obj_set_style_bg_opa(card_obj, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(card_obj, lv_color_hex(0x666666), 0); // Lighter grey border
+    lv_obj_set_style_border_width(card_obj, 1, 0); // 1px border
     lv_obj_set_style_pad_all(card_obj, 2, 0); // Small padding for the overall card
     lv_obj_center(card_obj);
 
@@ -48,7 +50,7 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     // Create Stats Label (Right Area)
     stats_label = lv_label_create(card_obj);
     lv_obj_set_style_text_font(stats_label, &lv_font_unscii_8, 0);
-    lv_obj_set_style_text_color(stats_label, lv_color_white(), 0); // Default text color
+    lv_obj_set_style_text_color(stats_label, lv_color_hex(0xFFD700), 0); // Gold/Yellow text color
     lv_obj_set_size(stats_label, stats_area_width, main_area_height);
     lv_label_set_long_mode(stats_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(stats_label, LV_ALIGN_TOP_RIGHT, 0, 0);
@@ -57,7 +59,7 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     // Create Message Label (Bottom Area)
     message_label = lv_label_create(card_obj);
     lv_obj_set_style_text_font(message_label, &lv_font_unscii_8, 0);
-    lv_obj_set_style_text_color(message_label, lv_color_white(), 0); // Default text color
+    lv_obj_set_style_text_color(message_label, lv_color_hex(0xADD8E6), 0); // Light blue text color
     lv_obj_set_size(message_label, card_width - 4, message_area_height -2); // Full width, adjusted for padding
     lv_label_set_long_mode(message_label, LV_LABEL_LONG_SCROLL_CIRCULAR); // Or CLIP
     lv_obj_align(message_label, LV_ALIGN_BOTTOM_LEFT, 0, 0);

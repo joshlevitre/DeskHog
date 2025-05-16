@@ -60,6 +60,9 @@ void CardController::initialize(DisplayInterface* display) {
     
     // Create card navigation stack
     cardStack = new CardNavigationStack(screen, screenWidth, screenHeight);
+    if (cardStack && displayInterface) {
+        cardStack->setMutex(displayInterface->getMutexPtr());
+    }
     
     // Create provision UI
     provisioningCard = new ProvisioningCard(
@@ -106,6 +109,12 @@ void CardController::initialize(DisplayInterface* display) {
             handleWiFiEvent(event);
         }
     });
+
+    // Set the mutex for the card stack if we have a display interface
+    if (cardStack && displayInterface) {
+        cardStack->setMutex(displayInterface->getMutexPtr());
+    }
+    // The first card added to cardStack (ProvisioningCard in this case) should be displayed by default.
 }
 
 void CardController::setDisplayInterface(DisplayInterface* display) {

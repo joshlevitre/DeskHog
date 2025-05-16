@@ -147,7 +147,7 @@ private:
      * @brief Create and initialize the Ultima game card
      */
     void createUltimaCard();
-    
+
     /**
      * @brief Handle insight-related events
      * @param event Event containing insight data
