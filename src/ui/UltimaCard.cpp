@@ -1,6 +1,8 @@
 #include "UltimaCard.h"
 #include "hardware/Input.h" // For BUTTON_UP, BUTTON_DOWN, BUTTON_CENTER
 
+// Using unscii_8 font now, ensure it's enabled in lv_conf.h (LV_FONT_UNSCII_8 1)
+
 // For now, let's assume a default mono font. If not available, this needs adjustment.
 // Ideally, enable LV_FONT_MONTSERRAT_10 or a specific mono font in lv_conf.h
 #ifndef LV_FONT_MONO
@@ -29,15 +31,15 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     lv_obj_center(card_obj);
 
     // Define approximate layout percentages/pixels
-    uint16_t message_area_height = 20; // Height for the bottom message log (1 line of Montserrat 14 + padding)
+    uint16_t message_area_height = 12; // Height for the bottom message log (1 line of unscii_8 + padding)
     uint16_t main_area_height = card_height - message_area_height - 4; // -4 for card padding top/bottom
     uint16_t stats_area_width = 70; // Fixed width for stats panel
     uint16_t map_area_width = card_width - stats_area_width - 6; // -6 for card padding left/right & gap
 
     // Create Map Label (Left Area)
     map_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(map_label, &lv_font_montserrat_14, 0); 
-    lv_obj_set_style_text_color(map_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(map_label, &lv_font_unscii_8, 0); 
+    lv_obj_set_style_text_color(map_label, lv_color_white(), 0); // Default text color
     lv_obj_set_size(map_label, map_area_width, main_area_height);
     lv_label_set_long_mode(map_label, LV_LABEL_LONG_CLIP); // Clip if too long, or WRAP if preferred
     lv_obj_align(map_label, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -45,8 +47,8 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
 
     // Create Stats Label (Right Area)
     stats_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(stats_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(stats_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(stats_label, &lv_font_unscii_8, 0);
+    lv_obj_set_style_text_color(stats_label, lv_color_white(), 0); // Default text color
     lv_obj_set_size(stats_label, stats_area_width, main_area_height);
     lv_label_set_long_mode(stats_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(stats_label, LV_ALIGN_TOP_RIGHT, 0, 0);
@@ -54,8 +56,8 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
 
     // Create Message Label (Bottom Area)
     message_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(message_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(message_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(message_label, &lv_font_unscii_8, 0);
+    lv_obj_set_style_text_color(message_label, lv_color_white(), 0); // Default text color
     lv_obj_set_size(message_label, card_width - 4, message_area_height -2); // Full width, adjusted for padding
     lv_label_set_long_mode(message_label, LV_LABEL_LONG_SCROLL_CIRCULAR); // Or CLIP
     lv_obj_align(message_label, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -89,6 +91,8 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
     bool handled = false;
     String msg_text = ""; // Renamed from 'msg' to avoid conflict 
     unsigned long current_time_ms = millis();
+
+    // String action_msg_color = "#ADD8E6"; // LightBlue for general messages
 
     bool up_currently_pressed = Input::isUpPressed();
     bool down_currently_pressed = Input::isDownPressed();
@@ -129,8 +133,6 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
                 break;
             case Input::BUTTON_CENTER:
                 msg_text = game_engine.searchCurrentTile();
-                // Stats might change from a search/action in future, so full updateView for now is safer
-                // updateView(); // Or just updateMapDisplay if search has no other side effects
                 handled = true; 
                 break;
         }

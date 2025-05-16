@@ -65,10 +65,11 @@ String UltimaGame::renderView() {
             int map_render_y = view_start_y + y_offset;
 
             if (map_render_x == player_x && map_render_y == player_y) {
-                view_str += '@';
+                view_str += "@";
             } else if (map_render_x >= 0 && map_render_x < MAP_WIDTH &&
                        map_render_y >= 0 && map_render_y < MAP_HEIGHT) {
-                view_str += game_map[map_render_y][map_render_x];
+                char tile = game_map[map_render_y][map_render_x];
+                view_str += tile; // Simply append the tile character
             } else {
                 view_str += ' '; // Out of map bounds, show empty space
             }
@@ -92,17 +93,15 @@ String UltimaGame::searchCurrentTile() {
         case '~':
             return "Water. Looks deep.";
         case '.':
-            return "Clear ground. Nothing special.";
+            return "Clear ground. Nothing special."; // This was the example you gave
         default:
             return "An unknown object.";
     }
 }
 
 String UltimaGame::getFormattedStats() {
-    String stats_str = "HP:  " + String(hp) + "/" + String(max_hp) + "\n";
-    stats_str += "LVL: " + String(level) + "\n";
+    String stats_str = "LVL: " + String(level) + "\n";
+    stats_str += "HP:  " + String(hp) + "/" + String(max_hp) + "\n";
     stats_str += "XP:  " + String(xp);
-    // Add more stats here as needed, e.g., Gold, Str, Dex etc.
-    // Ensure the string fits in the allocated stats panel width.
     return stats_str;
 } 

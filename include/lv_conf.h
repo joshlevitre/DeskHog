@@ -442,7 +442,8 @@
 
 #define LV_USE_LABEL      1 // Migrated from old config (was 1)
 #if LV_USE_LABEL
-    #define LV_LABEL_TEXT_SELECTION 0   // Migrated from old config (was 0)
+    #define LV_LABEL_TEXT_SELECTION 1   // Set to 1, was 0. Good for general label features.
+    // #define LV_LABEL_RECOLOR          1   // This define is not used in LVGL v9, keep commented/remove.
     #define LV_LABEL_LONG_TXT_HINT 1    // Migrated from old config (was 1)
     #define LV_LABEL_WAIT_CHAR_COUNT 3  // Default
 #endif

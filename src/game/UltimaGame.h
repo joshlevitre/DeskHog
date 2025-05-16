@@ -5,8 +5,8 @@
 
 #define MAP_WIDTH 20
 #define MAP_HEIGHT 15
-#define VIEW_WIDTH 16  // Adjusted for side stats panel
-#define VIEW_HEIGHT 7  // Adjusted for bottom message log
+#define VIEW_WIDTH 21  // Adjusted for unscii_8 font and side stats panel
+#define VIEW_HEIGHT 15 // Adjusted for unscii_8 font and bottom message log
 
 class UltimaGame {
 public:
