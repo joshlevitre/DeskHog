@@ -161,6 +161,14 @@ void UltimaCard::updateStatsDisplay() {
 
 void UltimaCard::updateView() {
     if (current_display_state != UltimaCardDisplayState::SHOWING_GAME) return;
+    if (game_engine.isPlayerDefeated()) { // Check for defeat before updating view
+        lv_label_set_text(map_label, ""); // Clear map
+        lv_label_set_text(stats_label, ""); // Clear stats
+        lv_label_set_text(message_label, "GAME OVER.\nTry again? (UP+DOWN).");
+        lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(message_label, LV_ALIGN_CENTER, 0, 0);
+        return;
+    }
     updateMapDisplay();
     updateStatsDisplay();
 }
@@ -182,69 +190,84 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
     }
 
     // --- Game Running Logic (current_display_state == SHOWING_GAME) ---
-    bool handled = false;
-    String msg_text = "";
-    unsigned long current_time_ms = millis();
+    if (game_engine.isPlayerDefeated()) {
+        // If player is defeated, only allow restart combo
+        unsigned long current_time_ms = millis();
+        bool up_currently_pressed = Input::isUpPressed();
+        bool down_currently_pressed = Input::isDownPressed();
+        if (up_currently_pressed && down_currently_pressed) {
+            if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) { 
+                game_engine.restartGame(); 
+                setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); 
+                last_combo_action_time = current_time_ms;
+                updateView(); // Update to clear GAME OVER and show splash
+            }
+        }
+        return true; // Absorb all other input if defeated
+    }
 
+    bool action_taken = false; // Flag to see if player action or combat happened
+    // turn_message is now handled by game_engine, retrieve it after actions.
+
+    unsigned long current_time_ms = millis();
     bool up_currently_pressed = Input::isUpPressed();
     bool down_currently_pressed = Input::isDownPressed();
     bool center_currently_pressed = Input::isCenterPressed();
 
-    // New: Check for UP + DOWN game restart combo first
     if (up_currently_pressed && down_currently_pressed) {
-        if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) { // Reuse combo cooldown
-            game_engine.restartGame(); // Reset game data
-            setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); // Go to splash screen
-            // Message for splash screen is set by setDisplayState, so no need for msg_text here.
+        if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) { 
+            game_engine.restartGame(); 
+            setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); 
             last_combo_action_time = current_time_ms;
+            action_taken = true; // Restart is an action
         }
-        handled = true;
     } 
-    // Existing combos for LEFT/RIGHT movement
     else if (center_currently_pressed && up_currently_pressed) {
         if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) {
             game_engine.movePlayer(1, 0); // Move Right
-            updateMapDisplay();
-            msg_text = "Moved Right.";
+            action_taken = true;
             last_combo_action_time = current_time_ms;
         }
-        handled = true;
     } else if (center_currently_pressed && down_currently_pressed) {
         if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) {
             game_engine.movePlayer(-1, 0); // Move Left
-            updateMapDisplay();
-            msg_text = "Moved Left.";
+            action_taken = true;
             last_combo_action_time = current_time_ms;
         }
-        handled = true;
     }
 
-    if (!handled) {
-        switch (button_index) {
-            case Input::BUTTON_UP:
-                game_engine.movePlayer(0, -1); // Move Up
-                updateMapDisplay();
-                msg_text = "Moved Up.";
-                handled = true;
-                break;
-            case Input::BUTTON_DOWN:
-                game_engine.movePlayer(0, 1);  // Move Down
-                updateMapDisplay();
-                msg_text = "Moved Down.";
-                handled = true;
-                break;
-            case Input::BUTTON_CENTER:
-                msg_text = game_engine.searchCurrentTile();
-                updateStatsDisplay();
-                handled = true;
-                break;
+    if (!action_taken && !center_currently_pressed) { // Avoid single center press triggering move and search
+       if(button_index == Input::BUTTON_UP && !down_currently_pressed && !center_currently_pressed) {
+            game_engine.movePlayer(0, -1); // Move Up
+            action_taken = true;
+       } else if (button_index == Input::BUTTON_DOWN && !up_currently_pressed && !center_currently_pressed) {
+            game_engine.movePlayer(0, 1);  // Move Down
+            action_taken = true;
+       }
+    } 
+    
+    if (!action_taken && button_index == Input::BUTTON_CENTER && !up_currently_pressed && !down_currently_pressed) {
+        game_engine.searchCurrentTile(); // Search action populates its own part of turn_message
+        action_taken = true;
+    }
+
+    if (action_taken && !game_engine.isPlayerDefeated()) { // Don't let monsters move if player just got defeated by their own action (e.g. trap)
+        game_engine.moveMonsters(); // Monsters move after player action
+    }
+
+    String msg_to_display = game_engine.getTurnMessageAndClear();
+    if (message_label) {
+        if (game_engine.isPlayerDefeated()) {
+            lv_label_set_text(message_label, "GAME OVER.\nTry again? (UP+DOWN).");
+            lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_align(message_label, LV_ALIGN_CENTER, 0, 0);
+        } else if (!msg_to_display.isEmpty()) {
+            lv_label_set_text(message_label, msg_to_display.c_str());
+        } else if (current_display_state == UltimaCardDisplayState::SHOWING_GAME) {
+             // lv_label_set_text(message_label, "Exploring..."); // Default message if nothing happened
         }
     }
-
-    if (message_label && !msg_text.isEmpty()) {
-        lv_label_set_text(message_label, msg_text.c_str());
-    }
-    // In game mode, all button presses are considered handled by the game itself,
-    // so they don't propagate to the CardNavigationStack.
+    
+    updateView(); // Update map and stats (will also handle GAME OVER display if needed)
     return true; 
 } 

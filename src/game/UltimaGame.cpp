@@ -6,10 +6,11 @@
 // Definition for the static const float member
 const float UltimaGame::INITIAL_FLOOR_CHANCE = 0.45f;
 
-UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD) {
+UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD), player_defeated_flag(false) {
     std::srand(std::time(0)); // Seed random number generator
     initializeOverworldMap();
     initializeStats(); // Initialize player stats
+    turn_message = ""; // Initialize turn message
 }
 
 void UltimaGame::initializeStats() {
@@ -17,6 +18,9 @@ void UltimaGame::initializeStats() {
     max_hp = 10;
     level = 1;
     xp = 0;
+    player_attack = PLAYER_ATTACK_DAMAGE; 
+    player_defeated_flag = false;
+    player_moves_count = 0; // Initialize player moves count
 }
 
 void UltimaGame::initializeOverworldMap() { // Renamed from initializeMap
@@ -138,6 +142,8 @@ void UltimaGame::findLargestConnectedArea(std::vector<Point>& out_largest_area_t
 
 void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
     dungeon_map.clear();
+    monsters.clear(); // Clear monsters for new dungeon
+    player_defeated_flag = false; // Reset defeat flag
     std::vector<Point> largest_floor_area;
     bool suitable_dungeon_generated = false;
 
@@ -229,7 +235,8 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
     }
 
     // 4. Player and Stair Placement (common for generated or fallback)
-    if (largest_floor_area.empty()) { // Should be extremely rare after fallback logic
+    Point stairs_up_pos(-1,-1); // To ensure monsters don't spawn on stairs
+    if (largest_floor_area.empty()) {
         // Absolute last resort: place player at fixed point if everything failed.
         player_x = MAP_WIDTH / 2;
         player_y = MAP_HEIGHT / 2;
@@ -249,17 +256,15 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
         Point player_start_pos = largest_floor_area[player_start_index];
         player_x = player_start_pos.x;
         player_y = player_start_pos.y;
-        dungeon_map[player_y][player_x] = T_DUNGEON_FLOOR; // Ensure player starts on a clear floor tile
+        dungeon_map[player_y][player_x] = T_DUNGEON_FLOOR; 
 
-        // Temporarily remove player's position from consideration for stairs up
-        std::vector<Point> available_for_stairs = largest_floor_area;
-        available_for_stairs.erase(std::remove_if(available_for_stairs.begin(), available_for_stairs.end(),
+        std::vector<Point> available_for_spawn = largest_floor_area;
+        available_for_spawn.erase(std::remove_if(available_for_spawn.begin(), available_for_spawn.end(),
                                            [&](const Point& p){ return p.x == player_x && p.y == player_y; }),
-                           available_for_stairs.end());
+                           available_for_spawn.end());
 
-        if (available_for_stairs.empty()) {
-            // If only one spot was available (player took it), try to place stairs adjacent
-            // This is a simplified adjacency check.
+        if (available_for_spawn.empty()) {
+            // Only one spot, player took it. Try adjacent for stairs.
             bool placed_stairs = false;
             int offsets[] = {-1, 1};
             for(int dx_offset : offsets) { // Check horizontal first
@@ -276,35 +281,96 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
                     }
                 }
             }
-            // If still not placed, stairs might be missing or on player.
+            // For simplicity, assume stairs_up_pos is set if successful.
+            // Example: if(placed_stairs) stairs_up_pos = Point(target_x, target_y);
         } else {
-            // Place Stairs Up
-            int stairs_up_index = rand() % available_for_stairs.size();
-            Point stairs_up_pos = available_for_stairs[stairs_up_index];
+            int stairs_up_index = rand() % available_for_spawn.size();
+            stairs_up_pos = available_for_spawn[stairs_up_index];
             dungeon_map[stairs_up_pos.y][stairs_up_pos.x] = T_STAIRS_UP;
+            
+            // Remove stairs pos from spawn consideration
+            available_for_spawn.erase(std::remove_if(available_for_spawn.begin(), available_for_spawn.end(),
+                                           [&](const Point& p){ return p.x == stairs_up_pos.x && p.y == stairs_up_pos.y; }),
+                               available_for_spawn.end());
+        }
+    }
+
+    // 5. Monster Spawning
+    if (!largest_floor_area.empty()) { 
+        std::vector<Point> spawn_points = largest_floor_area;
+        spawn_points.erase(std::remove_if(spawn_points.begin(), spawn_points.end(),
+                                    [&](const Point& p){ return (p.x == player_x && p.y == player_y) || 
+                                                              (stairs_up_pos.x != -1 && p.x == stairs_up_pos.x && p.y == stairs_up_pos.y); }),
+                            spawn_points.end());
+
+        int max_spawnable_here = MAX_MONSTERS_PER_DUNGEON;
+        if (spawn_points.size() < max_spawnable_here) {
+            max_spawnable_here = spawn_points.size();
+        }
+
+        int num_monsters_to_spawn = 0;
+        if (max_spawnable_here > 0) {
+            num_monsters_to_spawn = rand() % (max_spawnable_here + 1); // Random 0 to max_spawnable_here
+        }
+        
+        for (int i = 0; i < num_monsters_to_spawn; ++i) {
+            if (spawn_points.empty()) break; 
+            int monster_spawn_idx = rand() % spawn_points.size();
+            Point monster_pos = spawn_points[monster_spawn_idx];
+            int monster_hp = (rand() % 9) + 1; 
+            monsters.emplace_back(monster_pos.x, monster_pos.y, monster_hp, MONSTER_ATTACK_DAMAGE);
+            spawn_points.erase(spawn_points.begin() + monster_spawn_idx); 
         }
     }
 }
 
 void UltimaGame::movePlayer(int dx, int dy) {
+    if (player_defeated_flag) return; // Can't move if defeated
+
     int new_x = player_x + dx;
     int new_y = player_y + dy;
 
-    char target_tile;
+    clearTurnMessage(); // Clear previous turn messages before player action
+
     if (current_level == GameLevel::OVERWORLD) {
         if (new_x >= 0 && new_x < MAP_WIDTH && new_y >= 0 && new_y < MAP_HEIGHT) {
-            target_tile = game_map[new_y][new_x];
+            char target_tile = game_map[new_y][new_x];
             if (target_tile != T_OVERWORLD_WALL) {
                 player_x = new_x;
                 player_y = new_y;
+                player_moves_count++;
+                // turn_message += "Moved. "; // Basic move message if needed, or handled by search
             }
         }
     } else { // GameLevel::DUNGEON
         if (new_x >= 0 && new_x < MAP_WIDTH && new_y >= 0 && new_y < MAP_HEIGHT) {
-            target_tile = dungeon_map[new_y][new_x];
-            if (target_tile == T_DUNGEON_FLOOR || target_tile == T_STAIRS_UP) {
-                player_x = new_x;
-                player_y = new_y;
+            // Check for monster at target location first
+            Monster* target_monster = nullptr;
+            for (auto& monster : monsters) {
+                if (monster.active && monster.x == new_x && monster.y == new_y) {
+                    target_monster = &monster;
+                    break;
+                }
+            }
+
+            if (target_monster) {
+                resolveCombat(*target_monster); // Combat happens, turn_message is populated by resolveCombat
+                // Player does not move into monster's square unless monster is defeated AND we then allow it.
+                // For now, combat resolution itself is the action.
+                // If monster was defeated, it's now inactive. Player could move in a subsequent turn or if we add post-combat move here.
+            } else {
+                char target_tile = dungeon_map[new_y][new_x];
+                if (target_tile == T_DUNGEON_FLOOR || target_tile == T_STAIRS_UP) { 
+                    player_x = new_x;
+                    player_y = new_y;
+                    player_moves_count++;
+                    // turn_message += "Moved. ";
+                } else if (target_tile == T_DUNGEON_WALL) {
+                    turn_message += "Blocked by a wall. ";
+                } else {
+                    // Potentially other non-passable dungeon features in future
+                    turn_message += "Cannot move there. ";
+                }
             }
         }
     }
@@ -315,13 +381,6 @@ String UltimaGame::renderView() {
     int view_start_x = player_x - VIEW_WIDTH / 2;
     int view_start_y = player_y - VIEW_HEIGHT / 2;
 
-    // --- Start of Debug Output ---
-    Serial.println("--- renderView() Debug ---");
-    Serial.printf("Player (X,Y): (%d,%d)\n", player_x, player_y);
-    Serial.printf("VIEW_WIDTH: %d, VIEW_HEIGHT: %d\n", VIEW_WIDTH, VIEW_HEIGHT);
-    Serial.printf("view_start_x: %d, view_start_y: %d\n", view_start_x, view_start_y);
-    // --- End of Debug Output ---
-
     const std::vector<String>* current_map_ptr = (current_level == GameLevel::OVERWORLD) ? &game_map : &dungeon_map;
 
     for (int y_offset = 0; y_offset < VIEW_HEIGHT; ++y_offset) {
@@ -331,31 +390,32 @@ String UltimaGame::renderView() {
 
             if (map_render_x == player_x && map_render_y == player_y) {
                 view_str += T_PLAYER;
-            } else if (map_render_x >= 0 && map_render_x < MAP_WIDTH &&
-                       map_render_y >= 0 && map_render_y < MAP_HEIGHT) {
-                char tile = (*current_map_ptr)[map_render_y][map_render_x];
-                view_str += tile;
             } else {
-                view_str += ' '; // Out of map bounds, show empty space
+                bool monster_rendered = false;
+                if (current_level == GameLevel::DUNGEON) {
+                    for (const auto& monster : monsters) {
+                        if (monster.active && monster.x == map_render_x && monster.y == map_render_y) {
+                            view_str += T_MONSTER;
+                            monster_rendered = true;
+                            break;
+                        }
+                    }
+                }
+                if (!monster_rendered) {
+                    if (map_render_x >= 0 && map_render_x < MAP_WIDTH &&
+                        map_render_y >= 0 && map_render_y < MAP_HEIGHT) {
+                        char tile = (*current_map_ptr)[map_render_y][map_render_x];
+                        view_str += tile;
+                    } else {
+                        view_str += ' '; // Out of map bounds
+                    }
+                }
             }
         }
         if (y_offset < VIEW_HEIGHT - 1) {
              view_str += "\n";
         }
     }
-
-    // --- Start of Debug Output ---
-    Serial.println("Generated view_str:");
-    // Print char by char to see exact structure, including newlines
-    for (int i = 0; i < view_str.length(); i++) {
-        if (view_str[i] == '\n') {
-            Serial.print("[NL]" ); // Clearly mark newlines
-        } else {
-            Serial.print(view_str[i]);
-        }
-    }
-    Serial.println("\n--- End renderView() Debug ---");
-    // --- End of Debug Output ---
     return view_str;
 }
 
@@ -411,7 +471,157 @@ void UltimaGame::restartGame() {
     player_x = MAP_WIDTH / 2;
     player_y = MAP_HEIGHT / 2;
     current_level = GameLevel::OVERWORLD;
-    // No need to re-seed random, use initial seed from constructor for consistency if desired
-    initializeOverworldMap(); // Regenerates map and places player on sand
-    initializeStats();        // Resets HP, level, XP
+    initializeOverworldMap(); 
+    initializeStats(); // This will also reset player_moves_count to 0 via initializeStats call      
+    monsters.clear(); 
+    clearTurnMessage();
+    player_defeated_flag = false;
+    // player_moves_count = 0; // No longer needed here as initializeStats handles it
+}
+
+// New message handling methods
+void UltimaGame::clearTurnMessage() {
+    turn_message = "";
+}
+
+String UltimaGame::getTurnMessageAndClear() {
+    String temp_msg = turn_message;
+    turn_message = "";
+    return temp_msg;
+}
+
+String UltimaGame::resolveCombat(Monster& monster) {
+    clearTurnMessage();
+
+    if (player_defeated_flag || !monster.active) {
+        return ""; 
+    }
+
+    // 1. Player attacks monster
+    float player_hit_roll = (float)rand() / RAND_MAX;
+    float player_current_hit_chance = PLAYER_BASE_HIT_CHANCE + ((xp / 10) * PLAYER_HIT_CHANCE_PER_10_XP_INCREMENT);
+    player_current_hit_chance = constrain(player_current_hit_chance, 0.0f, 1.0f); // Cap at 100%
+
+    if (player_hit_roll <= player_current_hit_chance) {
+        monster.hp -= PLAYER_ATTACK_DAMAGE;
+        turn_message += "You hit Monster for " + String(PLAYER_ATTACK_DAMAGE) + " dmg. ";
+    } else {
+        turn_message += "You missed Monster. ";
+    }
+
+    if (monster.hp <= 0) {
+        monster.active = false;
+        // hp = constrain(hp, 0, max_hp); // Player HP is not affected here directly
+        xp += MONSTER_XP_REWARD;
+        turn_message += "Monster defeated! You gain " + String(MONSTER_XP_REWARD) + " XP.";
+        // TODO: Check for level up here
+        return turn_message; 
+    }
+
+    // 2. Monster attacks player (if still active)
+    float monster_hit_roll = (float)rand() / RAND_MAX;
+    float monster_current_hit_chance = MONSTER_BASE_HIT_CHANCE + (player_moves_count * MONSTER_HIT_CHANCE_PER_PLAYER_MOVE_INCREMENT);
+    monster_current_hit_chance = constrain(monster_current_hit_chance, 0.0f, 1.0f); // Cap at 100%
+
+    if (monster_hit_roll <= monster_current_hit_chance) {
+        hp -= MONSTER_ATTACK_DAMAGE;
+        turn_message += "Monster hits you for " + String(MONSTER_ATTACK_DAMAGE) + " dmg.";
+    } else {
+        turn_message += "Monster missed you.";
+    }
+
+    if (hp <= 0) {
+        hp = 0;
+        player_defeated_flag = true;
+        turn_message += " You have been defeated!";
+    }
+    
+    return turn_message; 
+}
+
+void UltimaGame::moveMonsters() {
+    if (current_level != GameLevel::DUNGEON || player_defeated_flag) {
+        return; // Monsters only move in dungeons and if player is active
+    }
+
+    // Using a temporary string for monster actions to append to main turn_message later
+    // This helps keep player action messages separate from monster action messages if needed.
+    String monster_actions_msg = ""; 
+
+    for (auto& monster : monsters) {
+        if (!monster.active) continue;
+
+        int sight_range = (rand() % 7) + 6; // Random sight range 6-12 tiles
+
+        // Check if player is within sight_range (simple Manhattan distance)
+        int dist_to_player_x = abs(player_x - monster.x);
+        int dist_to_player_y = abs(player_y - monster.y);
+
+        if (dist_to_player_x <= sight_range && dist_to_player_y <= sight_range) { // Player is visible
+            int dx = 0, dy = 0;
+            if (player_x < monster.x) dx = -1;
+            else if (player_x > monster.x) dx = 1;
+
+            if (player_y < monster.y) dy = -1;
+            else if (player_y > monster.y) dy = 1;
+
+            // Try to move on X-axis first, then Y if X is blocked or not needed
+            int next_monster_x = monster.x + dx;
+            int next_monster_y = monster.y;
+            bool moved_on_x = false;
+
+            if (dx != 0) { // If there is an X-component to move
+                if (next_monster_x == player_x && next_monster_y == player_y) {
+                    monster_actions_msg += resolveCombat(monster); // Monster attacks player
+                    if (player_defeated_flag) break; // Stop other monsters if player is defeated
+                    continue; // Next monster
+                } else if (dungeon_map[next_monster_y][next_monster_x] == T_DUNGEON_FLOOR) {
+                    bool occupied_by_other_monster = false;
+                    for (const auto& other_monster : monsters) {
+                        if (&other_monster != &monster && other_monster.active && 
+                            other_monster.x == next_monster_x && other_monster.y == next_monster_y) {
+                            occupied_by_other_monster = true;
+                            break;
+                        }
+                    }
+                    if (!occupied_by_other_monster) {
+                        monster.x = next_monster_x;
+                        // monster_actions_msg += "Monster moves. "; // Optional: message for simple move
+                        moved_on_x = true;
+                    }
+                }
+            }
+
+            if (!moved_on_x && dy != 0) { // If no X-move or X-move wasn't taken, try Y-move
+                next_monster_x = monster.x; // Reset X for Y-only move consideration
+                next_monster_y = monster.y + dy;
+                if (next_monster_x == player_x && next_monster_y == player_y) {
+                    monster_actions_msg += resolveCombat(monster); // Monster attacks player
+                    if (player_defeated_flag) break; 
+                    continue; // Next monster
+                } else if (dungeon_map[next_monster_y][next_monster_x] == T_DUNGEON_FLOOR) {
+                    bool occupied_by_other_monster = false;
+                    for (const auto& other_monster : monsters) {
+                        if (&other_monster != &monster && other_monster.active && 
+                            other_monster.x == next_monster_x && other_monster.y == next_monster_y) {
+                            occupied_by_other_monster = true;
+                            break;
+                        }
+                    }
+                    if (!occupied_by_other_monster) {
+                        monster.y = next_monster_y;
+                        // monster_actions_msg += "Monster moves. ";
+                    }
+                }
+            }
+        } // end if player visible
+        if (player_defeated_flag) break; // Stop processing other monsters if player got defeated by one
+    } // end for each monster
+
+    if (!monster_actions_msg.isEmpty()) {
+        if (!turn_message.isEmpty() && !turn_message.endsWith(" ")) {
+            turn_message += " "; // Add a space if there was a previous player message
+        }
+        turn_message += monster_actions_msg; // Append monster actions to overall turn message
+    }
 } 
