@@ -91,10 +91,10 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     lv_label_set_long_mode(start_screen_instructions_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(start_screen_instructions_label, card_width - 10); // Padded width
     lv_label_set_text(start_screen_instructions_label,
-        "၏/DOWN: Move\n"
+        "UP/DOWN: Move\n"
         "MID: Use\n"
         "MID+UP/DOWN: Right/Left\n"
-        "UP+DOWN: Restart Game"
+        "UP+DOWN: Restart"
     );
     lv_obj_align(start_screen_instructions_label, LV_ALIGN_TOP_MID, 0, 5); // Adjusted y: move to where title was
 
@@ -117,7 +117,7 @@ void UltimaCard::setDisplayState(UltimaCardDisplayState new_state) {
         case UltimaCardDisplayState::SHOWING_SPLASH_SCREEN:
             if(splash_screen_img) lv_obj_clear_flag(splash_screen_img, LV_OBJ_FLAG_HIDDEN);
             if(message_label) {
-                lv_label_set_text(message_label, "Press CENTER to Continue");
+                lv_label_set_text(message_label, ""); // Set to empty string
                 lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
                 lv_obj_align(message_label, LV_ALIGN_BOTTOM_MID, 0, -2);
             }
