@@ -7,6 +7,7 @@
 class UltimaCard : public InputHandler {
 public:
     enum class UltimaCardDisplayState {
+        SHOWING_SPLASH_SCREEN,
         SHOWING_START_SCREEN,
         SHOWING_GAME
     };
@@ -32,6 +33,9 @@ private:
     lv_obj_t* map_label; // LVGL label to display ASCII game map (renamed from game_label)
     lv_obj_t* stats_label; // LVGL label for player statistics
     lv_obj_t* message_label; // LVGL label for search messages etc.
+
+    // Splash Screen UI element
+    lv_obj_t* splash_screen_img; // New: For the splash screen image
 
     // Start Screen UI elements
     lv_obj_t* start_screen_title_label;

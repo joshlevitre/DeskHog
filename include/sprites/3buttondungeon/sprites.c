@@ -8,7 +8,6 @@
 // Array of all generated sprites
 const lv_img_dsc_t* all_generated_sprites[] = {
     &sprite_3buttondungeon,
-    &sprite_Normal_Walking_02,
 };
 
 // Number of sprites in the array

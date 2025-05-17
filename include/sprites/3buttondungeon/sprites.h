@@ -11,8 +11,7 @@ extern "C" {
 #endif
 
 // Include all sprite headers
-#include "3buttondungeon/sprite_3buttondungeon.h"
-#include "sprite_Normal_Walking_02.h"
+#include "sprite_3buttondungeon.h"
 
 // Array of all generated sprites
 extern const lv_img_dsc_t* all_generated_sprites[];
