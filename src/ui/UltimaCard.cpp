@@ -2,21 +2,13 @@
 #include "hardware/Input.h" // For BUTTON_UP, BUTTON_DOWN, BUTTON_CENTER
 #include "sprites/3buttondungeon/sprite_3buttondungeon.h" // Path for splash image
 
-// Font definitions for start screen (can be adjusted based on lv_conf.h)
-#if LV_FONT_MONTSERRAT_16
-#define START_TITLE_FONT &lv_font_montserrat_16
-#else
-#define START_TITLE_FONT &lv_font_unscii_8 // Fallback for title
-#endif
-#define START_INSTRUCTIONS_FONT &lv_font_unscii_8
+// Font definitions for start screen & game
+#define ULTIMA_GAME_FONT &lv_font_unscii_16 // Using unscii_16 for all Ultima text
 
-// Game uses unscii_8, defined in original UltimaCard.cpp
-// Ensure lv_font_unscii_8 is enabled in lv_conf.h
-
-// For now, let's assume a default mono font. If not available, this needs adjustment.
-// Ideally, enable LV_FONT_MONTSERRAT_10 or a specific mono font in lv_conf.h
+// Fallback for LV_FONT_MONO if unscii_16 isn't designated as a mono font by LVGL
+// (though for unscii, it effectively is)
 #ifndef LV_FONT_MONO
-#define LV_FONT_MONO LV_FONT_DEFAULT
+#define LV_FONT_MONO ULTIMA_GAME_FONT
 #endif
 
 // Static variables for combo action debouncing
@@ -51,53 +43,54 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     lv_obj_align(splash_screen_img, LV_ALIGN_CENTER, 0, 0);
 
     // --- Game UI Elements (created next, visibility managed by state) ---
-    uint16_t game_message_area_height = 12;
+    uint16_t game_message_area_height = 20; // Adjusted for potentially larger font
     uint16_t game_main_area_height = card_height - game_message_area_height - 4;
-    uint16_t game_stats_area_width = 70;
-    uint16_t game_map_area_width = card_width - game_stats_area_width - 6;
+    uint16_t game_stats_area_width = 80; // Adjusted for potentially larger font
+    uint16_t game_map_area_width = card_width - game_stats_area_width - 8; // Adjusted
 
     map_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(map_label, &lv_font_unscii_8, 0);
+    lv_obj_set_style_text_font(map_label, ULTIMA_GAME_FONT, 0);
     lv_obj_set_style_text_color(map_label, lv_color_white(), 0);
     lv_obj_set_size(map_label, game_map_area_width, game_main_area_height);
     lv_label_set_long_mode(map_label, LV_LABEL_LONG_CLIP);
     lv_obj_align(map_label, LV_ALIGN_TOP_LEFT, 0, 0);
 
     stats_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(stats_label, &lv_font_unscii_8, 0);
+    lv_obj_set_style_text_font(stats_label, ULTIMA_GAME_FONT, 0);
     lv_obj_set_style_text_color(stats_label, lv_color_hex(0xFFD700), 0);
     lv_obj_set_size(stats_label, game_stats_area_width, game_main_area_height);
     lv_label_set_long_mode(stats_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(stats_label, LV_ALIGN_TOP_RIGHT, 0, 0);
 
     message_label = lv_label_create(card_obj); // Common message label
-    lv_obj_set_style_text_font(message_label, &lv_font_unscii_8, 0);
+    lv_obj_set_style_text_font(message_label, ULTIMA_GAME_FONT, 0);
     lv_obj_set_style_text_color(message_label, lv_color_hex(0xADD8E6), 0);
-    lv_obj_set_size(message_label, card_width - 4, game_message_area_height -2);
+    lv_obj_set_size(message_label, card_width - 4, game_message_area_height - 2);
     lv_label_set_long_mode(message_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
     // Initial alignment/text set in setDisplayState
 
     // --- Start Screen UI Elements (Text based) ---
     start_screen_title_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(start_screen_title_label, START_TITLE_FONT, 0);
+    lv_obj_set_style_text_font(start_screen_title_label, ULTIMA_GAME_FONT, 0);
     lv_obj_set_style_text_color(start_screen_title_label, lv_color_white(), 0);
-    lv_label_set_text(start_screen_title_label, "Three Button Dungeon");
-    lv_obj_align(start_screen_title_label, LV_ALIGN_TOP_MID, 0, 10);
+    lv_label_set_text(start_screen_title_label, "How to Play");
+    lv_obj_align(start_screen_title_label, LV_ALIGN_TOP_MID, 0, 5); // Adjusted y for larger font
 
     start_screen_instructions_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(start_screen_instructions_label, START_INSTRUCTIONS_FONT, 0);
+    lv_obj_set_style_text_font(start_screen_instructions_label, ULTIMA_GAME_FONT, 0);
     lv_obj_set_style_text_color(start_screen_instructions_label, lv_color_hex(0xCCCCCC), 0);
     lv_label_set_long_mode(start_screen_instructions_label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(start_screen_instructions_label, card_width - 20); // Padded width
+    lv_obj_set_width(start_screen_instructions_label, card_width - 10); // Padded width
     lv_label_set_text(start_screen_instructions_label,
         "UP: Move Up\n"
         "DOWN: Move Down\n"
         "CENTER: Search/Interact\n\n"
         "COMBOS:\n"
-        "CENTER + UP: Move Right\n"
-        "CENTER + DOWN: Move Left\n\n"
+        "CENTER+UP: Move Right\n"
+        "CENTER+DOWN: Move Left\n\n"
+        "UP+DOWN: Restart Game"
     );
-    lv_obj_align(start_screen_instructions_label, LV_ALIGN_CENTER, 0, 15);
+    lv_obj_align(start_screen_instructions_label, LV_ALIGN_TOP_MID, 0, 25); // Adjusted y for title and larger font
 
     setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); // Initial state
 
@@ -192,7 +185,18 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
     bool down_currently_pressed = Input::isDownPressed();
     bool center_currently_pressed = Input::isCenterPressed();
 
-    if (center_currently_pressed && up_currently_pressed) {
+    // New: Check for UP + DOWN game restart combo first
+    if (up_currently_pressed && down_currently_pressed) {
+        if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) { // Reuse combo cooldown
+            game_engine.restartGame(); // Reset game data
+            setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); // Go to splash screen
+            // Message for splash screen is set by setDisplayState, so no need for msg_text here.
+            last_combo_action_time = current_time_ms;
+        }
+        handled = true;
+    } 
+    // Existing combos for LEFT/RIGHT movement
+    else if (center_currently_pressed && up_currently_pressed) {
         if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) {
             game_engine.movePlayer(1, 0); // Move Right
             updateMapDisplay();

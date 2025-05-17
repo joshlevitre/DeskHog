@@ -43,6 +43,7 @@ public:
 
     String searchCurrentTile(); // New method to search the player's current tile
     String getFormattedStats(); // Method to get stats as a displayable string
+    void restartGame(); // New: Method to restart the game
 
 private:
     std::vector<String> game_map; // Represents the overworld

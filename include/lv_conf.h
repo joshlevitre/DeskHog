@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file lv_conf.h
  * Configuration file for v9.3.0-dev
  *
@@ -371,7 +371,7 @@
 #define LV_FONT_SIMSUN_16_CJK            0  // Migrated from old config (was 0)
 
 #define LV_FONT_UNSCII_8  1  // Ensure this is 1
-#define LV_FONT_UNSCII_16 0 // Migrated from old config (was 0)
+#define LV_FONT_UNSCII_16 1 // Migrated from old config (was 0)
 
 #define LV_FONT_CUSTOM_DECLARE // Ensure this is an empty define, and any previous #include "fonts/fonts.h" is removed
 

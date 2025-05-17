@@ -189,4 +189,13 @@ String UltimaGame::getFormattedStats() {
     stats_str += "HP:  " + String(hp) + "/" + String(max_hp) + "\n";
     stats_str += "XP:  " + String(xp);
     return stats_str;
+}
+
+void UltimaGame::restartGame() {
+    player_x = MAP_WIDTH / 2;
+    player_y = MAP_HEIGHT / 2;
+    current_level = GameLevel::OVERWORLD;
+    // No need to re-seed random, use initial seed from constructor for consistency if desired
+    initializeOverworldMap(); // Regenerates map and places player on sand
+    initializeStats();        // Resets HP, level, XP
 } 
