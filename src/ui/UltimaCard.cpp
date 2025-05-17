@@ -1,7 +1,6 @@
 #include "UltimaCard.h"
 #include "hardware/Input.h" // For BUTTON_UP, BUTTON_DOWN, BUTTON_CENTER
 #include "sprites/3buttondungeon/sprite_3buttondungeon.h" // Path for splash image
-#include "Settings.h" // For accessing global settings if needed
 
 // Define the game font - using unscii_16 for all Ultima text
 LV_FONT_DECLARE(lv_unscii_16_custom_symbols); // Declare the custom symbols font

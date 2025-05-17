@@ -15,7 +15,7 @@ const char T_CAVE_ENTRANCE = 'O'; // Overworld representation of a cave
 const char T_DUNGEON_WALL = '#';
 const char T_DUNGEON_FLOOR = ' ';
 const char T_STAIRS_UP = '<';   // Leads from dungeon to overworld
-const char T_STAIRS_DOWN = '>'; // Leads from overworld to dungeon (player appears on this in dungeon)
+// const char T_STAIRS_DOWN = '>'; // Leads from overworld to dungeon (player appears on this in dungeon) - REMOVED
 const char T_OVERWORLD_WALL = '#'; // Existing wall type, now specific to overworld boundary
 
 // Custom Game Tile Definitions (UTF-8 Strings)
@@ -66,4 +66,27 @@ private:
     void initializeOverworldMap(); // Renamed from initializeMap
     void initializeDungeonMap(int from_cave_x, int from_cave_y); // For generating a new dungeon
     void initializeStats();
+
+    // Constants for Cellular Automata
+    static const int DUNGEON_GENERATION_ITERATIONS = 5; // How many times to run the CA simulation
+    static const int WALL_THRESHOLD = 5; // If a cell has this many or more wall neighbours, it becomes a wall
+    static const float INITIAL_FLOOR_CHANCE; // 45% chance for a tile to be initially floor
+    static const int MIN_DUNGEON_FLOOR_TILES = 25; // Minimum number of floor tiles for a valid dungeon
+    static const int MAX_DUNGEON_GENERATION_ATTEMPTS = 5; // Max attempts to generate a suitable dungeon
+
+    struct Point { 
+        int x, y;
+        // Constructor for easy initialization
+        Point(int _x = 0, int _y = 0) : x(_x), y(_y) {}
+        // Equality operator for comparing points, useful for std::vector::erase or std::find
+        bool operator==(const Point& other) const {
+            return x == other.x && y == other.y;
+        }
+    };
+
+    // Helper methods for dungeon generation
+    void runCellularAutomataIteration(std::vector<String>& map_to_smooth);
+    int countAliveNeighbors(const std::vector<String>& map_to_check, int x, int y, char wall_tile, char floor_tile);
+    void findLargestConnectedArea(std::vector<Point>& out_largest_area_tiles, std::vector<String>& map_to_analyze, char floor_tile);
+    void floodFill(int x, int y, const std::vector<String>& map_to_fill, std::vector<Point>& current_area_tiles, std::vector<std::vector<bool>>& visited, char floor_tile);
 }; 
