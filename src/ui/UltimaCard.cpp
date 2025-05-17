@@ -89,7 +89,6 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
         "COMBOS:\n"
         "CENTER + UP: Move Right\n"
         "CENTER + DOWN: Move Left\n\n"
-        "(Game controls active after start)"
     );
     lv_obj_align(start_screen_instructions_label, LV_ALIGN_CENTER, 0, 15); // Position instructions
 
