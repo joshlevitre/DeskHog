@@ -14,8 +14,8 @@ UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), cu
 }
 
 void UltimaGame::initializeStats() {
-    hp = 10;
-    max_hp = 10;
+    hp = 15;
+    max_hp = 15;
     level = 1;
     xp = 0;
     player_attack = PLAYER_ATTACK_DAMAGE; 
