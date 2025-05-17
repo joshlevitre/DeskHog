@@ -9,8 +9,8 @@ UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), cu
 }
 
 void UltimaGame::initializeStats() {
-    hp = 100;
-    max_hp = 100;
+    hp = 10;
+    max_hp = 10;
     level = 1;
     xp = 0;
 }
@@ -119,6 +119,13 @@ String UltimaGame::renderView() {
     int view_start_x = player_x - VIEW_WIDTH / 2;
     int view_start_y = player_y - VIEW_HEIGHT / 2;
 
+    // --- Start of Debug Output ---
+    Serial.println("--- renderView() Debug ---");
+    Serial.printf("Player (X,Y): (%d,%d)\n", player_x, player_y);
+    Serial.printf("VIEW_WIDTH: %d, VIEW_HEIGHT: %d\n", VIEW_WIDTH, VIEW_HEIGHT);
+    Serial.printf("view_start_x: %d, view_start_y: %d\n", view_start_x, view_start_y);
+    // --- End of Debug Output ---
+
     const std::vector<String>* current_map_ptr = (current_level == GameLevel::OVERWORLD) ? &game_map : &dungeon_map;
 
     for (int y_offset = 0; y_offset < VIEW_HEIGHT; ++y_offset) {
@@ -140,6 +147,19 @@ String UltimaGame::renderView() {
              view_str += "\n";
         }
     }
+
+    // --- Start of Debug Output ---
+    Serial.println("Generated view_str:");
+    // Print char by char to see exact structure, including newlines
+    for (int i = 0; i < view_str.length(); i++) {
+        if (view_str[i] == '\n') {
+            Serial.print("[NL]" ); // Clearly mark newlines
+        } else {
+            Serial.print(view_str[i]);
+        }
+    }
+    Serial.println("\n--- End renderView() Debug ---");
+    // --- End of Debug Output ---
     return view_str;
 }
 

@@ -1,9 +1,12 @@
 #include "UltimaCard.h"
 #include "hardware/Input.h" // For BUTTON_UP, BUTTON_DOWN, BUTTON_CENTER
 #include "sprites/3buttondungeon/sprite_3buttondungeon.h" // Path for splash image
+#include "Settings.h" // For accessing global settings if needed
 
-// Font definitions for start screen & game
-#define ULTIMA_GAME_FONT &lv_font_unscii_16 // Using unscii_16 for all Ultima text
+// Define the game font - using unscii_16 for all Ultima text
+LV_FONT_DECLARE(lv_unscii_16_custom_symbols); // Declare the custom symbols font
+static lv_font_t ultima_font_with_fallback;   // Static font object to hold main font + fallback
+#define ULTIMA_GAME_FONT &ultima_font_with_fallback // Using unscii_16 with custom symbols fallback
 
 // Fallback for LV_FONT_MONO if unscii_16 isn't designated as a mono font by LVGL
 // (though for unscii, it effectively is)
@@ -22,6 +25,11 @@ UltimaCard::UltimaCard(uint16_t width, uint16_t height)
       start_screen_title_label(nullptr), start_screen_instructions_label(nullptr),
       card_width(width), card_height(height),
       current_display_state(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN) { // Default to splash screen
+    // Game engine is initialized by its own constructor
+
+    // Initialize the fallback font
+    memcpy(&ultima_font_with_fallback, &lv_font_unscii_16, sizeof(lv_font_t));
+    ultima_font_with_fallback.fallback = &lv_unscii_16_custom_symbols;
 }
 
 UltimaCard::~UltimaCard() {
@@ -53,6 +61,7 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     lv_obj_set_style_text_color(map_label, lv_color_white(), 0);
     lv_obj_set_size(map_label, game_map_area_width, game_main_area_height);
     lv_label_set_long_mode(map_label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(map_label, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_align(map_label, LV_ALIGN_TOP_LEFT, 0, 0);
 
     stats_label = lv_label_create(card_obj);
@@ -70,11 +79,11 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     // Initial alignment/text set in setDisplayState
 
     // --- Start Screen UI Elements (Text based) ---
-    start_screen_title_label = lv_label_create(card_obj);
-    lv_obj_set_style_text_font(start_screen_title_label, ULTIMA_GAME_FONT, 0);
-    lv_obj_set_style_text_color(start_screen_title_label, lv_color_white(), 0);
-    lv_label_set_text(start_screen_title_label, "How to Play");
-    lv_obj_align(start_screen_title_label, LV_ALIGN_TOP_MID, 0, 5); // Adjusted y for larger font
+    // start_screen_title_label = lv_label_create(card_obj);
+    // lv_obj_set_style_text_font(start_screen_title_label, ULTIMA_GAME_FONT, 0);
+    // lv_obj_set_style_text_color(start_screen_title_label, lv_color_white(), 0);
+    // lv_label_set_text(start_screen_title_label, "How to Play");
+    // lv_obj_align(start_screen_title_label, LV_ALIGN_TOP_MID, 0, 5); // Adjusted y for larger font
 
     start_screen_instructions_label = lv_label_create(card_obj);
     lv_obj_set_style_text_font(start_screen_instructions_label, ULTIMA_GAME_FONT, 0);
@@ -82,15 +91,12 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     lv_label_set_long_mode(start_screen_instructions_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(start_screen_instructions_label, card_width - 10); // Padded width
     lv_label_set_text(start_screen_instructions_label,
-        "UP: Move Up\n"
-        "DOWN: Move Down\n"
-        "CENTER: Search/Interact\n\n"
-        "COMBOS:\n"
-        "CENTER+UP: Move Right\n"
-        "CENTER+DOWN: Move Left\n\n"
+        "၏/DOWN: Move\n"
+        "MID: Use\n"
+        "MID+UP/DOWN: Right/Left\n"
         "UP+DOWN: Restart Game"
     );
-    lv_obj_align(start_screen_instructions_label, LV_ALIGN_TOP_MID, 0, 25); // Adjusted y for title and larger font
+    lv_obj_align(start_screen_instructions_label, LV_ALIGN_TOP_MID, 0, 5); // Adjusted y: move to where title was
 
     setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); // Initial state
 
@@ -102,7 +108,7 @@ void UltimaCard::setDisplayState(UltimaCardDisplayState new_state) {
 
     // Hide all toggleable elements first
     if(splash_screen_img) lv_obj_add_flag(splash_screen_img, LV_OBJ_FLAG_HIDDEN);
-    if(start_screen_title_label) lv_obj_add_flag(start_screen_title_label, LV_OBJ_FLAG_HIDDEN);
+    // if(start_screen_title_label) lv_obj_add_flag(start_screen_title_label, LV_OBJ_FLAG_HIDDEN);
     if(start_screen_instructions_label) lv_obj_add_flag(start_screen_instructions_label, LV_OBJ_FLAG_HIDDEN);
     if(map_label) lv_obj_add_flag(map_label, LV_OBJ_FLAG_HIDDEN);
     if(stats_label) lv_obj_add_flag(stats_label, LV_OBJ_FLAG_HIDDEN);
@@ -117,10 +123,10 @@ void UltimaCard::setDisplayState(UltimaCardDisplayState new_state) {
             }
             break;
         case UltimaCardDisplayState::SHOWING_START_SCREEN:
-            if(start_screen_title_label) lv_obj_clear_flag(start_screen_title_label, LV_OBJ_FLAG_HIDDEN);
+            // if(start_screen_title_label) lv_obj_clear_flag(start_screen_title_label, LV_OBJ_FLAG_HIDDEN);
             if(start_screen_instructions_label) lv_obj_clear_flag(start_screen_instructions_label, LV_OBJ_FLAG_HIDDEN);
             if(message_label) {
-                lv_label_set_text(message_label, "Press CENTER to Start");
+                lv_label_set_text(message_label, ""); // Set to empty string
                 lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
                 lv_obj_align(message_label, LV_ALIGN_BOTTOM_MID, 0, -2);
             }

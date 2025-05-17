@@ -5,8 +5,8 @@
 
 #define MAP_WIDTH 20
 #define MAP_HEIGHT 15
-#define VIEW_WIDTH 21  // Adjusted for unscii_8 font and side stats panel
-#define VIEW_HEIGHT 15 // Adjusted for unscii_8 font and bottom message log
+#define VIEW_WIDTH 9  // Adjusted for unscii_16 font (145px / 8px_char = ~18, using 17 for odd)
+#define VIEW_HEIGHT 5 // Adjusted for unscii_16 font (111px / 16px_char = ~6, using 5 for odd)
 
 // Tile Definitions (Chars)
 const char T_SAND = '.';
@@ -16,8 +16,10 @@ const char T_DUNGEON_WALL = '#';
 const char T_DUNGEON_FLOOR = ' ';
 const char T_STAIRS_UP = '<';   // Leads from dungeon to overworld
 const char T_STAIRS_DOWN = '>'; // Leads from overworld to dungeon (player appears on this in dungeon)
-const char T_PLAYER = '@';
 const char T_OVERWORLD_WALL = '#'; // Existing wall type, now specific to overworld boundary
+
+// Custom Game Tile Definitions (UTF-8 Strings)
+const char T_PLAYER[] = "\xEE\xB0\xA8"; // Person symbol
 
 // Game Level Management
 enum class GameLevel {
