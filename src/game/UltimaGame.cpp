@@ -302,7 +302,7 @@ void UltimaGame::movePlayer(int dx, int dy) {
     } else { // GameLevel::DUNGEON
         if (new_x >= 0 && new_x < MAP_WIDTH && new_y >= 0 && new_y < MAP_HEIGHT) {
             target_tile = dungeon_map[new_y][new_x];
-            if (target_tile == T_DUNGEON_FLOOR || target_tile == T_STAIRS_UP) { // Removed T_STAIRS_DOWN
+            if (target_tile == T_DUNGEON_FLOOR || target_tile == T_STAIRS_UP) {
                 player_x = new_x;
                 player_y = new_y;
             }
@@ -372,7 +372,8 @@ String UltimaGame::searchCurrentTile() {
                 return "You enter the dark cave.";
             case T_OASIS:
                 hp = max_hp; // Heal to full
-                return "You rest at the oasis. HP restored!";
+                game_map[player_y][player_x] = T_SAND; // Oasis turns to sand
+                return "You rest at the oasis. HP restored! The oasis dries up.";
             case T_SAND:
                 return "Desert sands stretch out.";
             case T_OVERWORLD_WALL: 
