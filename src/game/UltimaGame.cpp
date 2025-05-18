@@ -8,7 +8,7 @@ const float UltimaGame::INITIAL_FLOOR_CHANCE = 0.45f;
 // MONSTER_BASE_HIT_CHANCE is constexpr in header
 // MONSTER_HIT_CHANCE_PER_PLAYER_MOVE_INCREMENT is constexpr in header
 // PLAYER_BASE_HIT_CHANCE is constexpr in header
-// PLAYER_HIT_CHANCE_PER_10_XP_INCREMENT is constexpr in header
+// PLAYER_HIT_CHANCE_PER_LEVEL_INCREMENT is constexpr in header
 
 UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD), player_defeated_flag(false), current_cave_ptr(nullptr) {
     std::srand(std::time(0)); // Seed random number generator
@@ -37,12 +37,12 @@ void UltimaGame::initializeOverworldMap() {
                 row += T_OVERWORLD_WALL; // Use defined constant for boundary
             } else {
                 int r = rand() % 100; // Percentage roll
-                if (r < 5) { // 5% chance for a Cave Entrance
+                if (r < 6) { // 6% chance for an Open Cave
                     row += T_OPEN_CAVE; // Use new open cave tile
                     cave_states.emplace_back(j, i); // Add new cave state, j is x, i is y
-                } else if (r < 10) { // 5% chance for an Oasis (total 10% for features)
+                } else if (r < 9) { // 3% chance for an Oasis (6 to 8)
                     row += T_OASIS;
-                } else {
+                } else { // Remaining 91% chance for Sand
                     row += T_SAND;
                 }
             }
@@ -569,16 +569,38 @@ String UltimaGame::getTurnMessageAndClear() {
     return temp_msg;
 }
 
-String UltimaGame::resolveCombat(Monster& monster) {
-    String combat_log_segment = ""; // Local log for this round of combat
+void UltimaGame::checkForLevelUp() {
+    // Using a simple threshold for now: gain a level for every XP_PER_LEVEL earned.
+    // Example: Level 1 needs 10 XP to get to Level 2. Level 2 needs 20 total XP to get to Level 3.
+    // This means next_level_xp = current_level * XP_PER_LEVEL (to reach next level)
+    // More robustly: player levels up if current_xp / XP_PER_LEVEL > (current_level -1)
+    
+    int potential_new_level = (xp / XP_PER_LEVEL) + 1;
 
+    if (potential_new_level > level) {
+        int levels_gained = potential_new_level - level;
+        for (int i = 0; i < levels_gained; ++i) {
+            level++;
+            max_hp += 1;
+            hp += 1; // Also heal 1 HP, effectively gaining 1 current HP unless already at max
+            if (hp > max_hp) { // Ensure healing doesn't exceed new max
+                hp = max_hp;
+            }
+            turn_message += "Level Up! You are now Level " + String(level) + ". Max HP +1. Hit +2%. ";
+        }
+    }
+}
+
+String UltimaGame::resolveCombat(Monster& monster) {
+    String combat_log_segment = ""; 
     if (player_defeated_flag || !monster.active) {
         return ""; 
     }
 
     // 1. Player attacks monster
     float player_hit_roll = (float)rand() / RAND_MAX;
-    float player_current_hit_chance = PLAYER_BASE_HIT_CHANCE + ((xp / 10) * PLAYER_HIT_CHANCE_PER_10_XP_INCREMENT);
+    // New hit chance calculation based on level
+    float player_current_hit_chance = PLAYER_BASE_HIT_CHANCE + ((level - 1) * PLAYER_HIT_CHANCE_PER_LEVEL_INCREMENT);
     player_current_hit_chance = constrain(player_current_hit_chance, 0.0f, 1.0f); 
 
     if (player_hit_roll <= player_current_hit_chance) {
@@ -593,10 +615,11 @@ String UltimaGame::resolveCombat(Monster& monster) {
         if (current_level == GameLevel::DUNGEON && current_cave_ptr && current_cave_ptr->monsters_remaining_in_dungeon > 0) {
              current_cave_ptr->monsters_remaining_in_dungeon--;
         } else if (monster.is_overworld_monster) {
-            // Overworld monster defeated, no cave state to update for this specific monster.
+            // Overworld monster defeated
         }
         xp += MONSTER_XP_REWARD;
-        combat_log_segment += "Monster defeated! You gain " + String(MONSTER_XP_REWARD) + " XP.";
+        combat_log_segment += "Monster defeated! You gain " + String(MONSTER_XP_REWARD) + " XP. ";
+        checkForLevelUp(); // Check for level up after gaining XP
         return combat_log_segment; 
     }
 

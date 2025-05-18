@@ -125,7 +125,8 @@ private:
     // Player Combat Stats
     static const int PLAYER_ATTACK_DAMAGE = 1;
     static constexpr float PLAYER_BASE_HIT_CHANCE = 0.55f;
-    static constexpr float PLAYER_HIT_CHANCE_PER_10_XP_INCREMENT = 0.05f; // 5%
+    static constexpr float PLAYER_HIT_CHANCE_PER_LEVEL_INCREMENT = 0.02f; // 2% per level (after level 1)
+    static const int XP_PER_LEVEL = 10; // XP needed for each level up
 
     struct Point { 
         int x, y;
@@ -145,6 +146,7 @@ private:
 
     // Combat
     String resolveCombat(Monster& monster);
+    void checkForLevelUp(); // New: Method to check and process level ups
 
     // Cave Events
     void processCaveEvents(); // New: To handle monster emergence and cave sealing over time
