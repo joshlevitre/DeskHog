@@ -9,8 +9,10 @@ const float UltimaGame::INITIAL_FLOOR_CHANCE = 0.45f;
 // MONSTER_HIT_CHANCE_PER_PLAYER_MOVE_INCREMENT is constexpr in header
 // PLAYER_BASE_HIT_CHANCE is constexpr in header
 // PLAYER_HIT_CHANCE_PER_LEVEL_INCREMENT is constexpr in header
+// DUNGEON_TREASURE_CHANCE is constexpr in header, no definition needed here.
+// CAVE_HAS_TREASURE_CHANCE is constexpr in header
 
-UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD), player_defeated_flag(false), current_cave_ptr(nullptr) {
+UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD), player_defeated_flag(false), game_won_flag(false), current_cave_ptr(nullptr) {
     std::srand(std::time(0)); // Seed random number generator
     initializeOverworldMap();
     initializeStats(); // Initialize player stats
@@ -24,7 +26,8 @@ void UltimaGame::initializeStats() {
     xp = 0;
     player_attack = PLAYER_ATTACK_DAMAGE; 
     player_defeated_flag = false;
-    player_moves_count = 0; // Initialize player moves count
+    player_moves_count = 0;
+    game_won_flag = false; 
 }
 
 void UltimaGame::initializeOverworldMap() {
@@ -53,6 +56,11 @@ void UltimaGame::initializeOverworldMap() {
     if (player_x > 0 && player_x < MAP_WIDTH -1 && player_y > 0 && player_y < MAP_HEIGHT -1) {
         game_map[player_y][player_x] = T_SAND;
     }
+    current_level = GameLevel::OVERWORLD;
+    player_x = overworld_player_x_return;
+    player_y = overworld_player_y_return;
+    current_cave_ptr = nullptr; 
+    checkWinCondition(); // Check win condition when leaving a cave
 }
 
 // New helper: Counts "alive" (floor) neighbors for a cell
@@ -251,7 +259,9 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
     }
 
     // 4. Player and Stair Placement (common for generated or fallback)
-    Point stairs_up_pos(-1,-1); // To ensure monsters don't spawn on stairs
+    Point stairs_up_pos(-1,-1);
+    std::vector<Point> available_for_spawn; // Ensure this is declared before the if/else
+
     if (largest_floor_area.empty()) {
         // Absolute last resort: place player at fixed point if everything failed.
         player_x = MAP_WIDTH / 2;
@@ -265,7 +275,7 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
         // Attempt to place stairs up somewhere, anywhere if possible
         if(player_y - 1 > 0) dungeon_map[player_y - 1][player_x] = T_STAIRS_UP;
         else if (player_x + 1 < MAP_WIDTH -1) dungeon_map[player_y][player_x+1] = T_STAIRS_UP;
-
+        // available_for_spawn remains empty in this case
     } else {
         // Place Player
         int player_start_index = rand() % largest_floor_area.size();
@@ -274,7 +284,7 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
         player_y = player_start_pos.y;
         dungeon_map[player_y][player_x] = T_DUNGEON_FLOOR; 
 
-        std::vector<Point> available_for_spawn = largest_floor_area;
+        available_for_spawn = largest_floor_area; // Assign to the already declared vector
         available_for_spawn.erase(std::remove_if(available_for_spawn.begin(), available_for_spawn.end(),
                                            [&](const Point& p){ return p.x == player_x && p.y == player_y; }),
                            available_for_spawn.end());
@@ -286,6 +296,7 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
             for(int dx_offset : offsets) { // Check horizontal first
                 if (player_x + dx_offset > 0 && player_x + dx_offset < MAP_WIDTH -1 && dungeon_map[player_y][player_x + dx_offset] == T_DUNGEON_FLOOR) {
                     dungeon_map[player_y][player_x + dx_offset] = T_STAIRS_UP;
+                    stairs_up_pos = Point(player_x + dx_offset, player_y); // Track where stairs were placed
                     placed_stairs = true; break;
                 }
             }
@@ -293,12 +304,11 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
                 for(int dy_offset : offsets) { // Check vertical
                      if (player_y + dy_offset > 0 && player_y + dy_offset < MAP_HEIGHT -1 && dungeon_map[player_y + dy_offset][player_x] == T_DUNGEON_FLOOR) {
                         dungeon_map[player_y + dy_offset][player_x] = T_STAIRS_UP;
+                        stairs_up_pos = Point(player_x, player_y + dy_offset); // Track where stairs were placed
                         placed_stairs = true; break;
                     }
                 }
             }
-            // For simplicity, assume stairs_up_pos is set if successful.
-            // Example: if(placed_stairs) stairs_up_pos = Point(target_x, target_y);
         } else {
             int stairs_up_index = rand() % available_for_spawn.size();
             stairs_up_pos = available_for_spawn[stairs_up_index];
@@ -311,32 +321,34 @@ void UltimaGame::initializeDungeonMap(int from_cave_x, int from_cave_y) {
         }
     }
 
-    // 5. Monster Spawning
-    if (!largest_floor_area.empty()) { 
-        std::vector<Point> spawn_points = largest_floor_area;
-        spawn_points.erase(std::remove_if(spawn_points.begin(), spawn_points.end(),
-                                    [&](const Point& p){ return (p.x == player_x && p.y == player_y) || 
-                                                              (stairs_up_pos.x != -1 && p.x == stairs_up_pos.x && p.y == stairs_up_pos.y); }),
-                            spawn_points.end());
+    // 5. Treasure Placement
+    if (((float)rand() / RAND_MAX) < CAVE_HAS_TREASURE_CHANCE) {
+        if (!available_for_spawn.empty()) {
+            int treasure_spawn_idx = rand() % available_for_spawn.size();
+            Point treasure_pos = available_for_spawn[treasure_spawn_idx];
+            dungeon_map[treasure_pos.y][treasure_pos.x] = T_TREASURE_MAP_CHAR;
+            // Remove treasure spot from further monster spawn consideration
+            available_for_spawn.erase(available_for_spawn.begin() + treasure_spawn_idx);
+        }
+    }
 
-        int max_spawnable_here = MAX_MONSTERS_PER_DUNGEON;
-        if (spawn_points.size() < max_spawnable_here) {
-            max_spawnable_here = spawn_points.size();
-        }
-
-        int num_monsters_to_spawn = 0;
-        if (max_spawnable_here > 0) {
-            num_monsters_to_spawn = rand() % (max_spawnable_here + 1); // Random 0 to max_spawnable_here
-        }
-        
-        for (int i = 0; i < num_monsters_to_spawn; ++i) {
-            if (spawn_points.empty()) break; 
-            int monster_spawn_idx = rand() % spawn_points.size();
-            Point monster_pos = spawn_points[monster_spawn_idx];
-            int monster_hp = (rand() % 9) + 1; 
-            monsters.emplace_back(monster_pos.x, monster_pos.y, monster_hp, MONSTER_ATTACK_DAMAGE);
-            spawn_points.erase(spawn_points.begin() + monster_spawn_idx); 
-        }
+    // 6. Monster Spawning
+    // std::vector<Point>& spawn_points = available_for_spawn; // Alias for clarity, or just use available_for_spawn
+    int max_spawnable_here = MAX_MONSTERS_PER_DUNGEON;
+    if (available_for_spawn.size() < max_spawnable_here) { // Use available_for_spawn directly
+        max_spawnable_here = available_for_spawn.size();
+    }
+    int num_monsters_to_spawn = 0;
+    if (max_spawnable_here > 0) {
+        num_monsters_to_spawn = rand() % (max_spawnable_here + 1); 
+    }
+    for (int i = 0; i < num_monsters_to_spawn; ++i) {
+        if (available_for_spawn.empty()) break; 
+        int monster_spawn_idx = rand() % available_for_spawn.size();
+        Point monster_pos = available_for_spawn[monster_spawn_idx];
+        int monster_hp = (rand() % 9) + 1; 
+        monsters.emplace_back(monster_pos.x, monster_pos.y, monster_hp, MONSTER_ATTACK_DAMAGE);
+        available_for_spawn.erase(available_for_spawn.begin() + monster_spawn_idx); 
     }
 
     if (current_cave_ptr) { // After monsters are spawned
@@ -395,11 +407,12 @@ void UltimaGame::movePlayer(int dx, int dy) {
                 // If monster was defeated, it's now inactive. Player could move in a subsequent turn or if we add post-combat move here.
             } else {
                 char target_tile = dungeon_map[new_y][new_x];
-                if (target_tile == T_DUNGEON_FLOOR || target_tile == T_STAIRS_UP) { 
+                // Allow moving onto floor, stairs, or treasure tiles
+                if (target_tile == T_DUNGEON_FLOOR || target_tile == T_STAIRS_UP || target_tile == T_TREASURE_MAP_CHAR) { 
                     player_x = new_x;
                     player_y = new_y;
                     player_moves_count++;
-                    // turn_message += "Moved. ";
+                    // turn_message += "Moved. "; // Optional: uncomment for move confirmation
                 } else if (target_tile == T_DUNGEON_WALL) {
                     turn_message += "Blocked by a wall. ";
                 } else {
@@ -452,7 +465,11 @@ String UltimaGame::renderView() {
                     if (map_render_x >= 0 && map_render_x < MAP_WIDTH &&
                         map_render_y >= 0 && map_render_y < MAP_HEIGHT) {
                         char tile = (*current_map_ptr)[map_render_y][map_render_x];
-                        view_str += tile;
+                        if (current_level == GameLevel::DUNGEON && tile == T_TREASURE_MAP_CHAR) {
+                            view_str += T_TREASURE_SYMBOL;
+                        } else {
+                            view_str += tile;
+                        }
                     } else {
                         view_str += ' '; 
                     }
@@ -507,7 +524,7 @@ String UltimaGame::searchCurrentTile() {
         }
     } else { // GameLevel::DUNGEON
         char tile_char = dungeon_map[player_y][player_x];
-        clearTurnMessage(); // Clear message at start of action
+        clearTurnMessage(); 
         switch (tile_char) {
             case T_STAIRS_UP:
                 if (current_cave_ptr) {
@@ -527,13 +544,23 @@ String UltimaGame::searchCurrentTile() {
                 // dungeon_map.clear(); // Optional: clear dungeon map
                 // monsters.clear(); // Monsters for this dungeon are implicitly gone when player leaves
                 current_cave_ptr = nullptr; // No longer in a specific cave
+                checkWinCondition(); // Check win condition when leaving a cave
                 return turn_message; // Return combined message
+            case T_TREASURE_MAP_CHAR:
+                player_attack += 1;
+                max_hp += 1;
+                hp += 1; // Heal 1, effectively gaining 1 current HP
+                if (hp > max_hp) hp = max_hp;
+                dungeon_map[player_y][player_x] = T_DUNGEON_FLOOR; // Treasure collected
+                turn_message = "Found treasure! ATK +1, Max HP +1.";
+                return turn_message;
             case T_DUNGEON_FLOOR:
                 return "The air is damp and cool.";
             case T_DUNGEON_WALL:
                 return "A cold, damp wall.";
             default:
-                return "An odd fixture in the dungeon.";
+                turn_message = "An odd fixture in the dungeon.";
+                return turn_message;
         }
     }
 }
@@ -556,6 +583,7 @@ void UltimaGame::restartGame() {
     clearTurnMessage();
     player_defeated_flag = false;
     current_cave_ptr = nullptr;
+    game_won_flag = false; // Reset game won flag on restart
 }
 
 // New message handling methods
@@ -702,6 +730,7 @@ void UltimaGame::processCaveEvents() {
             }
         }
     }
+    checkWinCondition(); // Check win condition after processing all cave events
 }
 
 void UltimaGame::moveMonsters() {
@@ -831,4 +860,22 @@ void UltimaGame::moveMonsters() {
         }
     }
     processCaveEvents(); // Process cave events after all monster movements for the turn
+} 
+
+void UltimaGame::checkWinCondition() {
+    if (game_won_flag) return; // Already won
+    if (cave_states.empty()) {
+        game_won_flag = false; // Cannot win if there are no caves to seal
+        return;
+    }
+    bool all_sealed = true;
+    for (const auto& cave : cave_states) {
+        if (!cave.is_sealed) {
+            all_sealed = false;
+            break;
+        }
+    }
+    if (all_sealed) {
+        game_won_flag = true;
+    }
 } 

@@ -9,7 +9,8 @@ public:
     enum class UltimaCardDisplayState {
         SHOWING_SPLASH_SCREEN,
         SHOWING_START_SCREEN,
-        SHOWING_GAME
+        SHOWING_GAME,
+        SHOWING_GAME_WON_SCREEN
     };
 
     UltimaCard(uint16_t width, uint16_t height);
@@ -40,6 +41,9 @@ private:
     // Start Screen UI elements
     lv_obj_t* start_screen_title_label;
     lv_obj_t* start_screen_instructions_label;
+
+    // Game Won Screen UI element
+    lv_obj_t* game_won_label; // New: For the "YOU WIN" message
 
     uint16_t card_width;
     uint16_t card_height;

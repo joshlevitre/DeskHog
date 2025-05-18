@@ -16,12 +16,14 @@ const char T_SEALED_CAVE = 'X';     // New: Sealed cave entrance
 const char T_DUNGEON_WALL = '#';
 const char T_DUNGEON_FLOOR = ' ';
 const char T_STAIRS_UP = '<';   // Leads from dungeon to overworld
-// const char T_STAIRS_DOWN = '>'; // Leads from overworld to dungeon (player appears on this in dungeon) - REMOVED
+const char T_TREASURE_MAP_CHAR = 'T'; // Character to store on the map for treasure
 const char T_OVERWORLD_WALL = '#'; // Existing wall type, now specific to overworld boundary
 
 // Custom Game Tile Definitions (UTF-8 Strings)
 const char T_PLAYER[] = "\xEE\xB0\xA8"; // Person symbol
 const char T_MONSTER[] = "\xEE\xB0\xB4"; // Monster symbol U+EC34 (Assumed UTF-8, placeholder if incorrect)
+const char T_TREASURE_SYMBOL[] = "\xD8\xAB"; // U+062B Arabic Letter Alef With Madda Above (looks treasure-like in unscii)
+const char T_YOU_WIN_SYMBOL[] = "\xE2\x98\xBB"; // U+263B WHITE SMILING FACE
 
 // Game Level Management
 enum class GameLevel {
@@ -56,6 +58,7 @@ public:
     String getTurnMessageAndClear(); // Gets the accumulated message for the turn
     void clearTurnMessage(); // Clears the turn message
     bool isPlayerDefeated() const { return player_defeated_flag; }
+    bool isGameWon() const { return game_won_flag; } // New: Getter for game won state
 
 private:
     std::vector<String> game_map; // Represents the overworld
@@ -90,6 +93,7 @@ private:
     std::vector<Monster> overworld_monsters; // New: Monsters on the overworld map
     String turn_message; // Accumulates messages for the current turn
     bool player_defeated_flag; // Flag to indicate if player has been defeated
+    bool game_won_flag; // New: Flag to indicate if all caves are sealed and game is won
     int player_moves_count; // Tracks total player moves
 
     int player_x;
@@ -128,6 +132,10 @@ private:
     static constexpr float PLAYER_HIT_CHANCE_PER_LEVEL_INCREMENT = 0.02f; // 2% per level (after level 1)
     static const int XP_PER_LEVEL = 10; // XP needed for each level up
 
+    // Dungeon Feature Constants
+    // static constexpr float DUNGEON_TREASURE_CHANCE = 0.05f; // 5% chance per floor tile -- To be removed
+    static constexpr float CAVE_HAS_TREASURE_CHANCE = 0.10f; // 10% chance for a cave to contain treasure
+
     struct Point { 
         int x, y;
         // Constructor for easy initialization
@@ -150,4 +158,5 @@ private:
 
     // Cave Events
     void processCaveEvents(); // New: To handle monster emergence and cave sealing over time
+    void checkWinCondition(); // New: To check if all caves are sealed
 }; 

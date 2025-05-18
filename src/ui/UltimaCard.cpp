@@ -22,6 +22,7 @@ UltimaCard::UltimaCard(uint16_t width, uint16_t height)
       map_label(nullptr), stats_label(nullptr), message_label(nullptr),
       splash_screen_img(nullptr), // Initialize new member
       start_screen_title_label(nullptr), start_screen_instructions_label(nullptr),
+      game_won_label(nullptr), // Initialize new member
       card_width(width), card_height(height),
       current_display_state(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN) { // Default to splash screen
     // Game engine is initialized by its own constructor
@@ -97,6 +98,15 @@ lv_obj_t* UltimaCard::createCard(lv_obj_t* parent) {
     );
     lv_obj_align(start_screen_instructions_label, LV_ALIGN_TOP_MID, 0, 5); // Adjusted y: move to where title was
 
+    // --- Game Won Screen UI Element ---
+    game_won_label = lv_label_create(card_obj);
+    lv_obj_set_style_text_font(game_won_label, ULTIMA_GAME_FONT, 0); 
+    lv_obj_set_style_text_color(game_won_label, lv_color_white(), 0);
+    lv_label_set_text_fmt(game_won_label, "YOU WIN %s", T_YOU_WIN_SYMBOL);
+    lv_obj_set_width(game_won_label, card_width - 10); 
+    lv_obj_set_style_text_align(game_won_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(game_won_label, LV_ALIGN_CENTER, 0, 0);
+
     setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN); // Initial state
 
     return card_obj;
@@ -111,6 +121,7 @@ void UltimaCard::setDisplayState(UltimaCardDisplayState new_state) {
     if(start_screen_instructions_label) lv_obj_add_flag(start_screen_instructions_label, LV_OBJ_FLAG_HIDDEN);
     if(map_label) lv_obj_add_flag(map_label, LV_OBJ_FLAG_HIDDEN);
     if(stats_label) lv_obj_add_flag(stats_label, LV_OBJ_FLAG_HIDDEN);
+    if(game_won_label) lv_obj_add_flag(game_won_label, LV_OBJ_FLAG_HIDDEN); // Hide initially
 
     switch (new_state) {
         case UltimaCardDisplayState::SHOWING_SPLASH_SCREEN:
@@ -140,6 +151,14 @@ void UltimaCard::setDisplayState(UltimaCardDisplayState new_state) {
             }
             updateView(); // Initial render of game map and stats
             break;
+        case UltimaCardDisplayState::SHOWING_GAME_WON_SCREEN:
+            if(game_won_label) lv_obj_clear_flag(game_won_label, LV_OBJ_FLAG_HIDDEN);
+            if(message_label) { // Clear any game messages
+                lv_label_set_text(message_label, "Press MID to Restart");
+                lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
+                lv_obj_align(message_label, LV_ALIGN_BOTTOM_MID, 0, -2);
+            }
+            break;
     }
 }
 
@@ -160,15 +179,24 @@ void UltimaCard::updateStatsDisplay() {
 }
 
 void UltimaCard::updateView() {
+    // Check for WIN state first
+    if (game_engine.isGameWon()) {
+        setDisplayState(UltimaCardDisplayState::SHOWING_GAME_WON_SCREEN);
+        return;
+    }
+    // If not won, and not showing game, do nothing (handles splash/start screen)
     if (current_display_state != UltimaCardDisplayState::SHOWING_GAME) return;
-    if (game_engine.isPlayerDefeated()) { // Check for defeat before updating view
-        lv_label_set_text(map_label, ""); // Clear map
-        lv_label_set_text(stats_label, ""); // Clear stats
+    
+    // If showing game, check for defeat
+    if (game_engine.isPlayerDefeated()) { 
+        lv_label_set_text(map_label, ""); 
+        lv_label_set_text(stats_label, ""); 
         lv_label_set_text(message_label, "GAME OVER.\nTry again? (UP+DOWN).");
         lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(message_label, LV_ALIGN_CENTER, 0, 0);
         return;
     }
+    // If game is active, not won, and not lost, update map and stats.
     updateMapDisplay();
     updateStatsDisplay();
 }
@@ -189,7 +217,37 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
         return false; 
     }
 
+    // Check for WIN state first
+    if (game_engine.isGameWon()) {
+        setDisplayState(UltimaCardDisplayState::SHOWING_GAME_WON_SCREEN);
+        return true; // Handled
+    }
+
+    // Corrected: Check current_display_state for SHOWING_GAME_WON_SCREEN
+    if (current_display_state == UltimaCardDisplayState::SHOWING_GAME_WON_SCREEN) {
+        unsigned long current_time_ms = millis();
+        bool up_currently_pressed = Input::isUpPressed();
+        bool down_currently_pressed = Input::isDownPressed();
+
+        // Allow CENTER or UP+DOWN to restart
+        if (button_index == Input::BUTTON_CENTER || (up_currently_pressed && down_currently_pressed)) {
+             if (current_time_ms - last_combo_action_time > COMBO_COOLDOWN_MS) {
+                game_engine.restartGame();
+                setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN);
+                last_combo_action_time = current_time_ms;
+                // updateView(); // Not strictly needed here as setDisplayState for splash will handle it
+                return true; // Handled
+            }
+        }
+        return true; // Absorb other inputs on win screen if no restart action taken
+    }
+
     // --- Game Running Logic (current_display_state == SHOWING_GAME) ---
+    // Note: The isGameWon() check is primarily in updateView() which transitions to SHOWING_GAME_WON_SCREEN.
+    // If somehow handleButtonPress is called while game is won but state hasn't transitioned, 
+    // it might be good practice to also check here, but it could lead to state transition issues if not careful.
+    // For now, relying on updateView() to manage the transition to win screen.
+
     if (game_engine.isPlayerDefeated()) {
         // If player is defeated, only allow restart combo
         unsigned long current_time_ms = millis();
@@ -263,8 +321,14 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
             lv_obj_align(message_label, LV_ALIGN_CENTER, 0, 0);
         } else if (!msg_to_display.isEmpty()) {
             lv_label_set_text(message_label, msg_to_display.c_str());
+            // Ensure consistent alignment for scrolling game messages
+            lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_LEFT, 0); 
+            lv_obj_align(message_label, LV_ALIGN_BOTTOM_LEFT, 0, 0); 
         } else if (current_display_state == UltimaCardDisplayState::SHOWING_GAME) {
-             // lv_label_set_text(message_label, "Exploring..."); // Default message if nothing happened
+             lv_label_set_text(message_label, ""); // Clear message if nothing to display
+             // Ensure it's still aligned correctly for SHOWING_GAME state even if empty
+             lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_LEFT, 0);
+             lv_obj_align(message_label, LV_ALIGN_BOTTOM_LEFT, 0, 0); 
         }
     }
     
