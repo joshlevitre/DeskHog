@@ -11,7 +11,8 @@
 // Tile Definitions (Chars)
 const char T_SAND = '.';
 const char T_OASIS = '~';
-const char T_CAVE_ENTRANCE = 'O'; // Overworld representation of a cave
+const char T_OPEN_CAVE = 'O';       // New: Open cave entrance
+const char T_SEALED_CAVE = 'X';     // New: Sealed cave entrance
 const char T_DUNGEON_WALL = '#';
 const char T_DUNGEON_FLOOR = ' ';
 const char T_STAIRS_UP = '<';   // Leads from dungeon to overworld
@@ -61,17 +62,32 @@ private:
     std::vector<String> dungeon_map; // Represents the current dungeon level
     GameLevel current_level;
 
+    struct CaveState {
+        int overworld_x, overworld_y;
+        bool is_sealed;
+        int monsters_remaining_in_dungeon; // How many were left when player exited
+        int turns_until_monsters_emerge; // Countdown for emergence, -1 if not active
+
+        CaveState(int ox, int oy) : 
+            overworld_x(ox), overworld_y(oy), is_sealed(false), 
+            monsters_remaining_in_dungeon(0), turns_until_monsters_emerge(-1) {}
+    };
+    std::vector<CaveState> cave_states; // Tracks all discovered caves
+    CaveState* current_cave_ptr; // Pointer to the state of the cave the player is currently in or just exited
+
     struct Monster {
         int x, y;
         int hp;
         int max_hp;
         int attack;
         bool active;
+        bool is_overworld_monster; // New: Flag for overworld monsters
 
-        Monster(int start_x, int start_y, int start_hp, int start_attack) :
-            x(start_x), y(start_y), hp(start_hp), max_hp(start_hp), attack(start_attack), active(true) {}
+        Monster(int start_x, int start_y, int start_hp, int start_attack, bool on_overworld = false) :
+            x(start_x), y(start_y), hp(start_hp), max_hp(start_hp), attack(start_attack), active(true), is_overworld_monster(on_overworld) {}
     };
-    std::vector<Monster> monsters;
+    std::vector<Monster> monsters; // Dungeon monsters
+    std::vector<Monster> overworld_monsters; // New: Monsters on the overworld map
     String turn_message; // Accumulates messages for the current turn
     bool player_defeated_flag; // Flag to indicate if player has been defeated
     int player_moves_count; // Tracks total player moves
@@ -129,4 +145,7 @@ private:
 
     // Combat
     String resolveCombat(Monster& monster);
+
+    // Cave Events
+    void processCaveEvents(); // New: To handle monster emergence and cave sealing over time
 }; 
