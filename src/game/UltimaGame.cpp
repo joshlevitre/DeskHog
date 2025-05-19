@@ -10,9 +10,8 @@ const float UltimaGame::INITIAL_FLOOR_CHANCE = 0.45f;
 // PLAYER_BASE_HIT_CHANCE is constexpr in header
 // PLAYER_HIT_CHANCE_PER_LEVEL_INCREMENT is constexpr in header
 // DUNGEON_TREASURE_CHANCE is constexpr in header, no definition needed here.
-// CAVE_HAS_TREASURE_CHANCE is constexpr in header
 
-UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD), player_defeated_flag(false), game_won_flag(false), current_cave_ptr(nullptr) {
+UltimaGame::UltimaGame() : player_x(MAP_WIDTH / 2), player_y(MAP_HEIGHT / 2), current_level(GameLevel::OVERWORLD), player_defeated_flag(false), current_cave_ptr(nullptr) {
     std::srand(std::time(0)); // Seed random number generator
     initializeOverworldMap();
     initializeStats(); // Initialize player stats
@@ -26,8 +25,7 @@ void UltimaGame::initializeStats() {
     xp = 0;
     player_attack = PLAYER_ATTACK_DAMAGE; 
     player_defeated_flag = false;
-    player_moves_count = 0;
-    game_won_flag = false; 
+    player_moves_count = 0; // Initialize player moves count
 }
 
 void UltimaGame::initializeOverworldMap() {
@@ -56,11 +54,6 @@ void UltimaGame::initializeOverworldMap() {
     if (player_x > 0 && player_x < MAP_WIDTH -1 && player_y > 0 && player_y < MAP_HEIGHT -1) {
         game_map[player_y][player_x] = T_SAND;
     }
-    current_level = GameLevel::OVERWORLD;
-    player_x = overworld_player_x_return;
-    player_y = overworld_player_y_return;
-    current_cave_ptr = nullptr; 
-    checkWinCondition(); // Check win condition when leaving a cave
 }
 
 // New helper: Counts "alive" (floor) neighbors for a cell
@@ -544,7 +537,6 @@ String UltimaGame::searchCurrentTile() {
                 // dungeon_map.clear(); // Optional: clear dungeon map
                 // monsters.clear(); // Monsters for this dungeon are implicitly gone when player leaves
                 current_cave_ptr = nullptr; // No longer in a specific cave
-                checkWinCondition(); // Check win condition when leaving a cave
                 return turn_message; // Return combined message
             case T_TREASURE_MAP_CHAR:
                 player_attack += 1;
@@ -583,7 +575,6 @@ void UltimaGame::restartGame() {
     clearTurnMessage();
     player_defeated_flag = false;
     current_cave_ptr = nullptr;
-    game_won_flag = false; // Reset game won flag on restart
 }
 
 // New message handling methods
@@ -673,64 +664,38 @@ String UltimaGame::resolveCombat(Monster& monster) {
 }
 
 void UltimaGame::processCaveEvents() {
+    // Process monster emergence countdowns
     for (auto& cave : cave_states) {
         if (cave.turns_until_monsters_emerge > 0) {
             cave.turns_until_monsters_emerge--;
             if (cave.turns_until_monsters_emerge == 0) {
-                cave.is_sealed = true;
-                if (cave.overworld_y >= 0 && cave.overworld_y < MAP_HEIGHT && 
-                    cave.overworld_x >= 0 && cave.overworld_x < MAP_WIDTH) {
-                    game_map[cave.overworld_y][cave.overworld_x] = T_SEALED_CAVE;
-                }
-                
-                int monsters_to_spawn_on_overworld = cave.monsters_remaining_in_dungeon;
-                if (monsters_to_spawn_on_overworld > MAX_MONSTERS_PER_DUNGEON) { // Safety cap
-                    monsters_to_spawn_on_overworld = MAX_MONSTERS_PER_DUNGEON;
-                }
-
-                if (monsters_to_spawn_on_overworld > 0) {
-                    turn_message += "Monsters emerge from the sealed cave! ";
-                }
-
-                for (int i = 0; i < monsters_to_spawn_on_overworld; ++i) {
-                    // Try to spawn adjacent to cave entrance
-                    bool spawned = false;
-                    int offsets[] = {0, -1, 1}; // Check 0,0 first (on cave itself, then around)
-                    for (int dy : offsets) {
-                        for (int dx : offsets) {
-                            if (dx == 0 && dy == 0 && i > 0) continue; // Don't stack all on cave tile if possible
-                            int spawn_x = cave.overworld_x + dx;
-                            int spawn_y = cave.overworld_y + dy;
-
-                            if (spawn_x >= 0 && spawn_x < MAP_WIDTH && spawn_y >= 0 && spawn_y < MAP_HEIGHT &&
-                                game_map[spawn_y][spawn_x] == T_SAND) { // Only spawn on sand
-                                bool spot_occupied = false;
-                                for(const auto& existing_monster : overworld_monsters) {
-                                    if(existing_monster.active && existing_monster.x == spawn_x && existing_monster.y == spawn_y) {
-                                        spot_occupied = true;
-                                        break;
-                                    }
-                                }
-                                if (!spot_occupied) {
-                                    int monster_hp = (rand() % 9) + 1;
-                                    overworld_monsters.emplace_back(spawn_x, spawn_y, monster_hp, MONSTER_ATTACK_DAMAGE, true);
-                                    spawned = true;
-                                    break; 
-                                }
-                            }
-                        }
-                        if (spawned) break;
-                    }
-                    if(!spawned) { // Could not find adjacent spot, maybe log or just skip this monster
-                        // turn_message += "(Could not place an emerging monster) ";
-                    }
-                }
-                cave.turns_until_monsters_emerge = -1; // Reset countdown
-                cave.monsters_remaining_in_dungeon = 0; // They've emerged or are lost
+                // Spawn overworld monster at cave entrance
+                overworld_monsters.push_back(Monster(cave.overworld_x, cave.overworld_y, 2, 1, true));
+                turn_message += "Monsters emerge from a cave! ";
             }
         }
     }
-    checkWinCondition(); // Check win condition after processing all cave events
+
+    // Check for win condition
+    if (areAllCavesSealed()) {
+        game_won_flag = true;
+        turn_message = "YOU WIN ☻"; // U+263B
+    }
+}
+
+bool UltimaGame::areAllCavesSealed() const {
+    // If there are no caves, player hasn't won yet
+    if (cave_states.empty()) {
+        return false;
+    }
+    
+    // Check if all caves are sealed
+    for (const auto& cave : cave_states) {
+        if (!cave.is_sealed) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void UltimaGame::moveMonsters() {
@@ -860,22 +825,4 @@ void UltimaGame::moveMonsters() {
         }
     }
     processCaveEvents(); // Process cave events after all monster movements for the turn
-} 
-
-void UltimaGame::checkWinCondition() {
-    if (game_won_flag) return; // Already won
-    if (cave_states.empty()) {
-        game_won_flag = false; // Cannot win if there are no caves to seal
-        return;
-    }
-    bool all_sealed = true;
-    for (const auto& cave : cave_states) {
-        if (!cave.is_sealed) {
-            all_sealed = false;
-            break;
-        }
-    }
-    if (all_sealed) {
-        game_won_flag = true;
-    }
 } 

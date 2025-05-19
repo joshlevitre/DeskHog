@@ -23,7 +23,6 @@ const char T_OVERWORLD_WALL = '#'; // Existing wall type, now specific to overwo
 const char T_PLAYER[] = "\xEE\xB0\xA8"; // Person symbol
 const char T_MONSTER[] = "\xEE\xB0\xB4"; // Monster symbol U+EC34 (Assumed UTF-8, placeholder if incorrect)
 const char T_TREASURE_SYMBOL[] = "\xD8\xAB"; // U+062B Arabic Letter Alef With Madda Above (looks treasure-like in unscii)
-const char T_YOU_WIN_SYMBOL[] = "\xE2\x98\xBB"; // U+263B WHITE SMILING FACE
 
 // Game Level Management
 enum class GameLevel {
@@ -58,12 +57,14 @@ public:
     String getTurnMessageAndClear(); // Gets the accumulated message for the turn
     void clearTurnMessage(); // Clears the turn message
     bool isPlayerDefeated() const { return player_defeated_flag; }
-    bool isGameWon() const { return game_won_flag; } // New: Getter for game won state
+    bool isGameWon() const { return game_won_flag; } // New: Check if player has won
+    bool areAllCavesSealed() const; // New: Check if all caves are sealed
 
 private:
     std::vector<String> game_map; // Represents the overworld
     std::vector<String> dungeon_map; // Represents the current dungeon level
     GameLevel current_level;
+    bool game_won_flag; // New: Flag to indicate if player has won
 
     struct CaveState {
         int overworld_x, overworld_y;
@@ -93,7 +94,6 @@ private:
     std::vector<Monster> overworld_monsters; // New: Monsters on the overworld map
     String turn_message; // Accumulates messages for the current turn
     bool player_defeated_flag; // Flag to indicate if player has been defeated
-    bool game_won_flag; // New: Flag to indicate if all caves are sealed and game is won
     int player_moves_count; // Tracks total player moves
 
     int player_x;
@@ -158,5 +158,4 @@ private:
 
     // Cave Events
     void processCaveEvents(); // New: To handle monster emergence and cave sealing over time
-    void checkWinCondition(); // New: To check if all caves are sealed
 }; 
