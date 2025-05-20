@@ -705,10 +705,15 @@ void UltimaGame::moveMonsters() {
         String monster_actions_msg = ""; 
         for (auto& monster : monsters) { // These are dungeon monsters
             if (!monster.active) continue;
-
+            
             int sight_range = (rand() % 7) + 3; // Random sight range 3-9 tiles (inclusive: rand()%7 gives 0-6, add 3)
             int dist_to_player_x = abs(player_x - monster.x);
             int dist_to_player_y = abs(player_y - monster.y);
+
+            Serial.printf("[UltimaGame] Monster at (%d,%d) checking player at (%d,%d)\n", 
+                monster.x, monster.y, player_x, player_y);
+            Serial.printf("[UltimaGame] Distance: dx=%d, dy=%d, sight_range=%d\n", 
+                dist_to_player_x, dist_to_player_y, sight_range);
 
             if (dist_to_player_x <= sight_range && dist_to_player_y <= sight_range) { // Player is visible
                 int dx = 0, dy = 0;
@@ -717,18 +722,21 @@ void UltimaGame::moveMonsters() {
                 if (player_y < monster.y) dy = -1;
                 else if (player_y > monster.y) dy = 1;
 
-                int next_monster_x = monster.x + dx;
-                int next_monster_y = monster.y; // Try X first
-                bool moved_on_x = false;
+                Serial.printf("[UltimaGame] Player visible! Moving dx=%d, dy=%d\n", dx, dy);
 
-                if (dx != 0) { // If there is an X-component to move
+                bool moved = false;
+                // Try X movement first
+                if (dx != 0) {
+                    int next_monster_x = monster.x + dx;
+                    int next_monster_y = monster.y;
+                    
                     if (next_monster_x == player_x && next_monster_y == player_y) {
-                        monster_actions_msg += resolveCombat(monster); 
-                        if (player_defeated_flag) break; 
-                        continue; // Next monster in this loop
+                        monster_actions_msg += resolveCombat(monster);
+                        if (player_defeated_flag) break;
+                        continue;
                     } else if (dungeon_map[next_monster_y][next_monster_x] == T_DUNGEON_FLOOR) {
                         bool occupied_by_other_dungeon_monster = false;
-                        for (const auto& other_monster : monsters) { // Check against other dungeon monsters
+                        for (const auto& other_monster : monsters) {
                             if (&other_monster != &monster && other_monster.active && 
                                 other_monster.x == next_monster_x && other_monster.y == next_monster_y) {
                                 occupied_by_other_dungeon_monster = true;
@@ -737,21 +745,23 @@ void UltimaGame::moveMonsters() {
                         }
                         if (!occupied_by_other_dungeon_monster) {
                             monster.x = next_monster_x;
-                            moved_on_x = true;
+                            moved = true;
                         }
                     }
                 }
 
-                if (!moved_on_x && dy != 0) { // If no X-move or X-move wasn't taken, try Y-move
-                    next_monster_x = monster.x; 
-                    next_monster_y = monster.y + dy;
+                // If X movement didn't work, try Y movement
+                if (!moved && dy != 0) {
+                    int next_monster_x = monster.x;
+                    int next_monster_y = monster.y + dy;
+                    
                     if (next_monster_x == player_x && next_monster_y == player_y) {
-                        monster_actions_msg += resolveCombat(monster); 
-                        if (player_defeated_flag) break; 
-                        continue; // Next monster
+                        monster_actions_msg += resolveCombat(monster);
+                        if (player_defeated_flag) break;
+                        continue;
                     } else if (dungeon_map[next_monster_y][next_monster_x] == T_DUNGEON_FLOOR) {
                         bool occupied_by_other_dungeon_monster = false;
-                        for (const auto& other_monster : monsters) { // Check against other dungeon monsters
+                        for (const auto& other_monster : monsters) {
                             if (&other_monster != &monster && other_monster.active && 
                                 other_monster.x == next_monster_x && other_monster.y == next_monster_y) {
                                 occupied_by_other_dungeon_monster = true;
@@ -763,10 +773,8 @@ void UltimaGame::moveMonsters() {
                         }
                     }
                 }
-            } // end if player visible
-            if (player_defeated_flag) break; // Stop processing other monsters if player got defeated
-        } // end for each dungeon monster
-
+            }
+        }
         if (!monster_actions_msg.isEmpty()) {
             if (!turn_message.isEmpty() && !turn_message.endsWith(" ")) turn_message += " ";
             turn_message += monster_actions_msg;
@@ -787,33 +795,53 @@ void UltimaGame::moveMonsters() {
                 if (player_y < monster.y) dy = -1;
                 else if (player_y > monster.y) dy = 1;
 
-                int next_monster_x = monster.x + dx;
-                int next_monster_y = monster.y; // Try X first
-                bool moved_on_x = false;
-
+                // Try both X and Y movement
+                bool moved = false;
+                
+                // Try X movement first
                 if (dx != 0) {
+                    int next_monster_x = monster.x + dx;
+                    int next_monster_y = monster.y;
+                    
                     if (next_monster_x == player_x && next_monster_y == player_y) {
-                        monster_actions_msg += resolveCombat(monster); // Append combat message
-                        if (player_defeated_flag) break;
-                        continue;
-                    } else if (game_map[next_monster_y][next_monster_x] == T_SAND || game_map[next_monster_y][next_monster_x] == T_OASIS) { // Can move on Sand or Oasis
-                        bool occupied = false;
-                        for (const auto& om : overworld_monsters) if (&om != &monster && om.active && om.x == next_monster_x && om.y == next_monster_y) { occupied = true; break; }
-                        if (!occupied) { monster.x = next_monster_x; moved_on_x = true;}
-                    }
-                }
-
-                if (!moved_on_x && dy != 0) {
-                    next_monster_x = monster.x; 
-                    next_monster_y = monster.y + dy;
-                    if (next_monster_x == player_x && next_monster_y == player_y) {
-                        monster_actions_msg += resolveCombat(monster); // Append combat message
+                        monster_actions_msg += resolveCombat(monster);
                         if (player_defeated_flag) break;
                         continue;
                     } else if (game_map[next_monster_y][next_monster_x] == T_SAND || game_map[next_monster_y][next_monster_x] == T_OASIS) {
                         bool occupied = false;
-                        for (const auto& om : overworld_monsters) if (&om != &monster && om.active && om.x == next_monster_x && om.y == next_monster_y) { occupied = true; break; }
-                        if (!occupied) { monster.y = next_monster_y; }
+                        for (const auto& om : overworld_monsters) {
+                            if (&om != &monster && om.active && om.x == next_monster_x && om.y == next_monster_y) {
+                                occupied = true;
+                                break;
+                            }
+                        }
+                        if (!occupied) {
+                            monster.x = next_monster_x;
+                            moved = true;
+                        }
+                    }
+                }
+
+                // If X movement didn't work, try Y movement
+                if (!moved && dy != 0) {
+                    int next_monster_x = monster.x;
+                    int next_monster_y = monster.y + dy;
+                    
+                    if (next_monster_x == player_x && next_monster_y == player_y) {
+                        monster_actions_msg += resolveCombat(monster);
+                        if (player_defeated_flag) break;
+                        continue;
+                    } else if (game_map[next_monster_y][next_monster_x] == T_SAND || game_map[next_monster_y][next_monster_x] == T_OASIS) {
+                        bool occupied = false;
+                        for (const auto& om : overworld_monsters) {
+                            if (&om != &monster && om.active && om.x == next_monster_x && om.y == next_monster_y) {
+                                occupied = true;
+                                break;
+                            }
+                        }
+                        if (!occupied) {
+                            monster.y = next_monster_y;
+                        }
                     }
                 }
             }

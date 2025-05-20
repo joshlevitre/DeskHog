@@ -16,6 +16,10 @@ static lv_font_t ultima_font_with_fallback;   // Static font object to hold main
 // Static variables for combo action debouncing
 static unsigned long last_combo_action_time = 0;
 const unsigned long COMBO_COOLDOWN_MS = 100; // Cooldown for combo actions (milliseconds)
+static unsigned long last_up_press_time = 0;
+static unsigned long last_center_press_time = 0;
+static unsigned long last_down_press_time = 0;
+const unsigned long COMBO_WINDOW_MS = 200; // Window for button combo detection
 
 UltimaCard::UltimaCard(uint16_t width, uint16_t height)
     : card_obj(nullptr), 
@@ -187,12 +191,23 @@ void UltimaCard::updateView() {
 }
 
 bool UltimaCard::handleButtonPress(uint8_t button_index) {
+    unsigned long current_time = millis();
+    
     // Check for restart combo (UP+DOWN) first, regardless of state
     if (Input::isUpPressed() && Input::isDownPressed()) {
         game_engine.restartGame();
         setDisplayState(UltimaCardDisplayState::SHOWING_SPLASH_SCREEN);
         updateView();
         return true;
+    }
+
+    // Update button press timestamps
+    if (button_index == Input::BUTTON_UP) {
+        last_up_press_time = current_time;
+    } else if (button_index == Input::BUTTON_CENTER) {
+        last_center_press_time = current_time;
+    } else if (button_index == Input::BUTTON_DOWN) {
+        last_down_press_time = current_time;
     }
 
     if (current_display_state == UltimaCardDisplayState::SHOWING_SPLASH_SCREEN) {
@@ -219,27 +234,45 @@ bool UltimaCard::handleButtonPress(uint8_t button_index) {
         // Normal game controls
         if (button_index == Input::BUTTON_UP) {
             game_engine.movePlayer(0, -1);
+            game_engine.moveMonsters(); // Add monster movement
             updateView();
             return true;
         } else if (button_index == Input::BUTTON_DOWN) {
             game_engine.movePlayer(0, 1);
-            updateView();
-            return true;
-        } else if (button_index == Input::BUTTON_CENTER && Input::isUpPressed()) {
-            game_engine.movePlayer(1, 0); // Right
-            updateView();
-            return true;
-        } else if (button_index == Input::BUTTON_CENTER && Input::isDownPressed()) {
-            game_engine.movePlayer(-1, 0); // Left
+            game_engine.moveMonsters(); // Add monster movement
             updateView();
             return true;
         } else if (button_index == Input::BUTTON_CENTER) {
-            String search_result = game_engine.searchCurrentTile();
-            if (search_result.length() > 0) {
-                lv_label_set_text(message_label, search_result.c_str());
+            // Check if Up was pressed within the combo window
+            bool up_pressed_recently = (current_time - last_up_press_time) < COMBO_WINDOW_MS;
+            bool down_pressed_recently = (current_time - last_down_press_time) < COMBO_WINDOW_MS;
+            
+            Serial.printf("[UltimaCard] Button timing - Up: %lu ms ago, Down: %lu ms ago\n", 
+                current_time - last_up_press_time,
+                current_time - last_down_press_time);
+
+            if (up_pressed_recently) {
+                Serial.println("[UltimaCard] Center + Up combo detected - moving right");
+                game_engine.movePlayer(1, 0); // Right
+                game_engine.moveMonsters(); // Add monster movement
+                updateView();
+                return true;
+            } else if (down_pressed_recently) {
+                Serial.println("[UltimaCard] Center + Down combo detected - moving left");
+                game_engine.movePlayer(-1, 0); // Left
+                game_engine.moveMonsters(); // Add monster movement
+                updateView();
+                return true;
+            } else {
+                Serial.println("[UltimaCard] Center pressed alone - attempting to search");
+                String search_result = game_engine.searchCurrentTile();
+                if (search_result.length() > 0) {
+                    lv_label_set_text(message_label, search_result.c_str());
+                }
+                game_engine.moveMonsters(); // Add monster movement even after searching
+                updateView();
+                return true;
             }
-            updateView();
-            return true;
         }
     }
     return false;
