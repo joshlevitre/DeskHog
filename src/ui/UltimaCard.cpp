@@ -138,7 +138,7 @@ void UltimaCard::setDisplayState(UltimaCardDisplayState new_state) {
             if(map_label) lv_obj_clear_flag(map_label, LV_OBJ_FLAG_HIDDEN);
             if(stats_label) lv_obj_clear_flag(stats_label, LV_OBJ_FLAG_HIDDEN);
             if(message_label) {
-                lv_label_set_text(message_label, "Welcome to the Desert!"); // Or restore last game message
+                lv_label_set_text(message_label, "Welcome adventurer! Explore the desert, defeat devils and seals caves to get stronger."); // Updated welcome message
                 lv_obj_set_style_text_align(message_label, LV_TEXT_ALIGN_LEFT, 0);
                 lv_obj_align(message_label, LV_ALIGN_BOTTOM_LEFT, 0, 0);
             }
