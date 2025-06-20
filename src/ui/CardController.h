@@ -11,6 +11,7 @@
 #include "ui/ProvisioningCard.h"
 #include "ui/InsightCard.h"
 #include "ui/FriendCard.h"
+#include "ui/FlappyGameCard.h"
 #include "hardware/DisplayInterface.h"
 #include "EventQueue.h"
 
@@ -87,6 +88,12 @@ public:
     AnimationCard* getAnimationCard() { return animationCard; }
 
     /**
+     * @brief Get the flappy game card
+     * @return Pointer to flappy game card
+     */
+    FlappyGameCard* getFlappyGameCard() { return flappyGameCard; }
+
+    /**
      * @brief Get all insight cards
      * @return Reference to vector of insight card pointers
      */
@@ -114,6 +121,7 @@ private:
     CardNavigationStack* cardStack;     ///< Navigation stack for cards
     ProvisioningCard* provisioningCard; ///< Card for device provisioning
     AnimationCard* animationCard;       ///< Card for animations
+    FlappyGameCard* flappyGameCard;     ///< Card for flappy bird game
     std::vector<InsightCard*> insightCards; ///< Collection of insight cards
     
     // Display interface for thread safety
@@ -124,6 +132,11 @@ private:
      */
     void createAnimationCard();
     
+    /**
+     * @brief Create and initialize the flappy game card
+     */
+    void createFlappyGameCard();
+
     /**
      * @brief Handle insight-related events
      * @param event Event containing insight data

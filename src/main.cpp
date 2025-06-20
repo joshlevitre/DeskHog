@@ -117,6 +117,11 @@ void lvglHandlerTask(void* parameter) {
 
         InsightCard::processUIQueue();
         
+        // Update flappy game if it exists
+        if (cardController && cardController->getFlappyGameCard()) {
+            cardController->getFlappyGameCard()->update();
+        }
+        
         // Poll buttons at regular intervals
         TickType_t currentTime = xTaskGetTickCount();
         if ((currentTime - lastButtonCheck) >= buttonCheckInterval) {

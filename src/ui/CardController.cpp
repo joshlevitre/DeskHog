@@ -18,6 +18,7 @@ CardController::CardController(
     cardStack(nullptr),
     provisioningCard(nullptr),
     animationCard(nullptr),
+    flappyGameCard(nullptr),
     displayInterface(nullptr)
 {
 }
@@ -32,6 +33,9 @@ CardController::~CardController() {
     
     delete animationCard;
     animationCard = nullptr;
+    
+    delete flappyGameCard;
+    flappyGameCard = nullptr;
     
     // Use mutex if available before cleaning up insight cards
     if (displayInterface && displayInterface->getMutexPtr()) {
@@ -70,6 +74,9 @@ void CardController::initialize(DisplayInterface* display) {
     
     // Create animation card
     createAnimationCard();
+    
+    // Create flappy game card
+    createFlappyGameCard();
     
     // Get count of insights to determine card count
     std::vector<String> insightIds = configManager.getAllInsightIds();
@@ -126,6 +133,50 @@ void CardController::createAnimationCard() {
     
     // Register the animation card as an input handler
     cardStack->registerInputHandler(animationCard->getCard(), animationCard);
+    
+    displayInterface->giveMutex();
+}
+
+// Create a flappy game card
+void CardController::createFlappyGameCard() {
+    Serial.println("[CardCtrl-DEBUG] Creating flappy game card...");
+    
+    if (!displayInterface) {
+        Serial.println("[CardCtrl-ERROR] Display interface is null!");
+        return;
+    }
+    
+    if (!displayInterface->takeMutex(portMAX_DELAY)) {
+        Serial.println("[CardCtrl-ERROR] Failed to take mutex for flappy game card creation.");
+        return;
+    }
+    
+    // Create new flappy game card
+    flappyGameCard = new FlappyGameCard(
+        screen
+    );
+    
+    if (!flappyGameCard) {
+        Serial.println("[CardCtrl-ERROR] Failed to create FlappyGameCard object.");
+        displayInterface->giveMutex();
+        return;
+    }
+    
+    if (!flappyGameCard->getCard()) {
+        Serial.println("[CardCtrl-ERROR] FlappyGameCard created but getCard() returned null.");
+        delete flappyGameCard;
+        flappyGameCard = nullptr;
+        displayInterface->giveMutex();
+        return;
+    }
+    
+    // Add to navigation stack
+    cardStack->addCard(flappyGameCard->getCard());
+    
+    // Register the flappy game card as an input handler
+    cardStack->registerInputHandler(flappyGameCard->getCard(), flappyGameCard);
+    
+    Serial.println("[CardCtrl-DEBUG] Flappy game card created and added to stack successfully.");
     
     displayInterface->giveMutex();
 }
