@@ -143,4 +143,12 @@ private:
      * @return Decoded string
      */
     String decodeHtmlEntities(const String& html);
+    
+    /**
+     * @brief Extract content from XML tag with CDATA handling
+     * @param xmlContent The XML content to search
+     * @param tagName The tag name to extract
+     * @return The extracted content
+     */
+    String extractTagContent(const String& xmlContent, const String& tagName);
 }; 
