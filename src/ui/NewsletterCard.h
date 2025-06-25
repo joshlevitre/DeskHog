@@ -59,16 +59,10 @@ public:
     void updateDisplay();
     
     /**
-     * @brief Set the RSS feed URL
-     * @param url The RSS feed URL to monitor
+     * @brief Get the current feed URL (always PostHog Substack)
+     * @return The PostHog Substack RSS feed URL
      */
-    void setFeedUrl(const String& url);
-    
-    /**
-     * @brief Get the current feed URL
-     * @return The current RSS feed URL
-     */
-    String getFeedUrl() const { return _rssClient.getFeedUrl(); }
+    String getFeedUrl() const { return "https://posthog.substack.com/feed"; }
     
     /**
      * @brief Force a feed refresh
@@ -106,9 +100,9 @@ private:
     lv_obj_t* _status_label;             ///< Status/info label
     
     // Constants
-    static constexpr int MAX_LINES_PER_PAGE = 8;  ///< Maximum lines per page
-    static constexpr int MAX_CHARS_PER_LINE = 35; ///< Maximum characters per line
-    static constexpr int REFRESH_INTERVAL = 600000; ///< Refresh interval (10 minutes)
+    static constexpr int MAX_LINES_PER_PAGE = 6;  ///< Maximum lines per page
+    static constexpr int MAX_CHARS_PER_LINE = 32; ///< Maximum characters per line
+    static constexpr int REFRESH_INTERVAL = 300000; ///< Refresh interval (5 minutes)
     unsigned long _lastRefreshTime;      ///< Last refresh timestamp
     
     /**
@@ -150,14 +144,9 @@ private:
     bool shouldRefresh() const;
     
     /**
-     * @brief Load the RSS feed URL from storage
+     * @brief Initialize the RSS client with PostHog Substack feed
      */
-    void loadFeedUrl();
-    
-    /**
-     * @brief Save the RSS feed URL to storage
-     */
-    void saveFeedUrl();
+    void initializeFeed();
     
     /**
      * @brief Strip HTML tags and decode entities from content

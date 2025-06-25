@@ -9,8 +9,8 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
     
     Serial.println("NewsletterCard: Constructor called");
     
-    // Load feed URL from config
-    loadFeedUrl();
+    // Initialize with hardcoded PostHog Substack feed
+    initializeFeed();
     
     // Create the main card container
     _card = lv_obj_create(parent);
@@ -19,39 +19,50 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
         return;
     }
     
-    // Set card size and style
+    // Set card size and style with gradient background
     lv_obj_set_size(_card, width, height);
-    lv_obj_set_style_bg_color(_card, lv_color_black(), 0);
-    lv_obj_set_style_border_width(_card, 0, 0);
-    lv_obj_set_style_pad_all(_card, 5, 0);
+    lv_obj_set_style_bg_color(_card, lv_color_make(20, 25, 40), 0);
+    lv_obj_set_style_border_width(_card, 2, 0);
+    lv_obj_set_style_border_color(_card, lv_color_make(60, 80, 120), 0);
+    lv_obj_set_style_border_opa(_card, LV_OPA_50, 0);
+    lv_obj_set_style_radius(_card, 8, 0);
+    lv_obj_set_style_pad_all(_card, 8, 0);
     
-    // Create title label
+    // Create title label with enhanced styling
     _title_label = lv_label_create(_card);
     if (_title_label) {
-        lv_obj_set_style_text_color(_title_label, lv_color_white(), 0);
+        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
         lv_obj_set_style_text_font(_title_label, &font_loud_noises, 0);
-        lv_label_set_text(_title_label, "Newsletter Reader");
-        lv_obj_align(_title_label, LV_ALIGN_TOP_LEFT, 0, 0);
+        lv_label_set_text(_title_label, "📧 PostHog News");
+        lv_obj_align(_title_label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_obj_set_style_text_align(_title_label, LV_TEXT_ALIGN_CENTER, 0);
     }
     
-    // Create status label
+    // Create status label with enhanced styling
     _status_label = lv_label_create(_card);
     if (_status_label) {
-        lv_obj_set_style_text_color(_status_label, lv_color_make(150, 150, 150), 0);
+        lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
         lv_obj_set_style_text_font(_status_label, &font_label, 0);
-        lv_label_set_text(_status_label, "Initializing...");
-        lv_obj_align(_status_label, LV_ALIGN_TOP_LEFT, 0, 25);
+        lv_label_set_text(_status_label, "🔄 Loading...");
+        lv_obj_align(_status_label, LV_ALIGN_TOP_MID, 0, 30);
+        lv_obj_set_style_text_align(_status_label, LV_TEXT_ALIGN_CENTER, 0);
     }
     
-    // Create content label
+    // Create content label with enhanced styling
     _content_label = lv_label_create(_card);
     if (_content_label) {
-        lv_obj_set_style_text_color(_content_label, lv_color_white(), 0);
+        lv_obj_set_style_text_color(_content_label, lv_color_make(220, 220, 220), 0);
         lv_obj_set_style_text_font(_content_label, &font_label, 0);
-        lv_obj_set_style_text_line_space(_content_label, 18, 0);
-        lv_label_set_long_mode(_content_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
-        lv_obj_set_size(_content_label, width - 10, height - 60);
-        lv_obj_align(_content_label, LV_ALIGN_TOP_LEFT, 0, 50);
+        lv_obj_set_style_text_line_space(_content_label, 20, 0);
+        lv_obj_set_style_text_align(_content_label, LV_TEXT_ALIGN_LEFT, 0);
+        lv_label_set_long_mode(_content_label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_size(_content_label, width - 20, height - 70);
+        lv_obj_align(_content_label, LV_ALIGN_TOP_LEFT, 5, 55);
+        // Add subtle background for content
+        lv_obj_set_style_bg_color(_content_label, lv_color_make(30, 35, 50), 0);
+        lv_obj_set_style_bg_opa(_content_label, LV_OPA_30, 0);
+        lv_obj_set_style_radius(_content_label, 4, 0);
+        lv_obj_set_style_pad_all(_content_label, 5, 0);
     }
     
     Serial.println("NewsletterCard: Initial display update");
@@ -156,25 +167,32 @@ void NewsletterCard::updateDisplay() {
     }
 }
 
-void NewsletterCard::setFeedUrl(const String& url) {
-    _rssClient.setFeedUrl(url);
-    saveFeedUrl();
-}
 
 void NewsletterCard::refreshFeed() {
     Serial.println("NewsletterCard: Starting feed refresh...");
     
+    // Show loading state immediately
+    lv_label_set_text(_status_label, "🔄 Fetching newsletter...");
+    lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
+    
     if (!_rssClient.isReady()) {
-        Serial.println("NewsletterCard: RSS client not ready - WiFi not connected or URL not set");
-        lv_label_set_text(_status_label, "No WiFi or URL");
-        lv_obj_set_style_text_color(_status_label, lv_color_make(200, 0, 0), 0);
+        Serial.println("NewsletterCard: RSS client not ready - WiFi not connected");
+        lv_label_set_text(_status_label, "🚫 No WiFi connection");
+        lv_obj_set_style_text_color(_status_label, lv_color_make(255, 100, 100), 0);
+        
+        // Try to reconnect in 3 seconds
+        _lastRefreshTime = millis() - REFRESH_INTERVAL + 3000;
         return;
     }
     
-    Serial.println("NewsletterCard: RSS client ready, fetching feed...");
+    Serial.println("NewsletterCard: RSS client ready, fetching PostHog Substack feed...");
+    
+    // Clear any old items to force fresh fetch
+    _rssClient.clearItems();
     
     if (_rssClient.fetchFeed()) {
         Serial.println("NewsletterCard: Feed fetch successful");
+        _lastRefreshTime = millis(); // Update refresh time on success
         
         const RssItem* latestItem = _rssClient.getLatestItem();
         if (latestItem) {
@@ -184,22 +202,21 @@ void NewsletterCard::refreshFeed() {
             
             _currentArticle = latestItem;
             
-            if (_rssClient.hasNewItems()) {
-                Serial.println("NewsletterCard: New items found, showing notification");
-                _currentState = DisplayState::NEW_NOTIFICATION;
-            } else {
-                Serial.println("NewsletterCard: No new items, showing idle state");
-                _currentState = DisplayState::IDLE;
-            }
+            // Always show as available (since we always want the latest)
+            _currentState = DisplayState::IDLE;
+            Serial.println("NewsletterCard: Newsletter available, showing idle state");
         } else {
             Serial.println("NewsletterCard: No items found in feed");
             _currentState = DisplayState::IDLE;
         }
     } else {
         Serial.println("NewsletterCard: Feed fetch failed");
-        lv_label_set_text(_status_label, "Failed to fetch feed");
-        lv_obj_set_style_text_color(_status_label, lv_color_make(200, 0, 0), 0);
+        lv_label_set_text(_status_label, "⚠️ Feed fetch failed");
+        lv_obj_set_style_text_color(_status_label, lv_color_make(255, 150, 0), 0);
         _currentState = DisplayState::IDLE;
+        
+        // Retry in 30 seconds
+        _lastRefreshTime = millis() - REFRESH_INTERVAL + 30000;
     }
     
     updateDisplay();
@@ -215,45 +232,55 @@ void NewsletterCard::showIdleState() {
     const RssItem* latest = _rssClient.getLatestItem();
     if (latest) {
         Serial.printf("NewsletterCard: Displaying latest newsletter: %s\n", latest->title.c_str());
-        // Show the latest newsletter even in idle state
-        lv_label_set_text(_title_label, "Latest Newsletter");
+        // Show the latest newsletter with attractive styling
+        lv_label_set_text(_title_label, "📧 Latest from PostHog");
         lv_label_set_text(_content_label, latest->title.c_str());
-        lv_label_set_text(_status_label, "Press CENTER to read");
+        lv_label_set_text(_status_label, "👆 Press CENTER to read");
         
-        // Update colors to show it's available
-        lv_obj_set_style_text_color(_title_label, lv_color_black(), 0);
-        lv_obj_set_style_text_color(_content_label, lv_color_black(), 0);
-        lv_obj_set_style_text_color(_status_label, lv_color_black(), 0);
+        // Update colors for available content
+        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
+        lv_obj_set_style_text_color(_content_label, lv_color_make(255, 255, 255), 0);
+        lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
     } else {
         Serial.println("NewsletterCard: No newsletter available to display");
-        // No newsletter available
-        lv_label_set_text(_title_label, "Newsletter Reader");
-        lv_label_set_text(_content_label, "No newsletters available");
-        lv_label_set_text(_status_label, "Press CENTER to refresh");
+        // No newsletter available - encourage refresh
+        lv_label_set_text(_title_label, "📧 PostHog News");
+        lv_label_set_text(_content_label, "🔄 Fetching latest newsletter...\n\nMake sure WiFi is connected!");
+        lv_label_set_text(_status_label, "👆 Press CENTER to refresh");
         
-        // Update colors
-        lv_obj_set_style_text_color(_title_label, lv_color_black(), 0);
-        lv_obj_set_style_text_color(_content_label, lv_color_make(100, 100, 100), 0);
-        lv_obj_set_style_text_color(_status_label, lv_color_black(), 0);
+        // Update colors for no content state
+        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
+        lv_obj_set_style_text_color(_content_label, lv_color_make(180, 180, 180), 0);
+        lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
     }
 }
 
 void NewsletterCard::showNewNotificationState() {
     const RssItem* latest = _rssClient.getLatestItem();
     if (latest) {
-        lv_label_set_text(_title_label, "Latest Newsletter");
+        lv_label_set_text(_title_label, "🆕 NEW from PostHog!");
         lv_label_set_text(_content_label, latest->title.c_str());
-        lv_label_set_text(_status_label, "Press CENTER to read");
+        lv_label_set_text(_status_label, "✨ Press CENTER to read ✨");
         
-        // Update colors to indicate content is available
-        lv_obj_set_style_text_color(_title_label, lv_color_black(), 0);
-        lv_obj_set_style_text_color(_content_label, lv_color_black(), 0);
+        // Update colors to indicate new content with excitement
+        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 100, 100), 0);
+        lv_obj_set_style_text_color(_content_label, lv_color_make(255, 255, 255), 0);
+        lv_obj_set_style_text_color(_status_label, lv_color_make(100, 255, 100), 0);
     }
 }
 
 void NewsletterCard::showReadingState() {
     if (_currentArticle) {
-        lv_label_set_text(_title_label, _currentArticle->title.c_str());
+        // Truncate long titles for better display
+        String displayTitle = _currentArticle->title;
+        if (displayTitle.length() > 25) {
+            displayTitle = displayTitle.substring(0, 22) + "...";
+        }
+        lv_label_set_text(_title_label, displayTitle.c_str());
+        
+        // Set reading mode colors
+        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 255, 100), 0);
+        
         updateReadingDisplay();
     }
 }
@@ -325,18 +352,18 @@ void NewsletterCard::updateReadingDisplay() {
     if (_currentPage < _articlePages.size()) {
         lv_label_set_text(_content_label, _articlePages[_currentPage].c_str());
         
-        // Update status to show page info
-        String status = "Page " + String(_currentPage + 1) + " of " + String(_articlePages.size());
+        // Create attractive page indicator
+        String status = "📜 " + String(_currentPage + 1) + "/" + String(_articlePages.size());
         if (_currentPage < _articlePages.size() - 1) {
-            status += " - Press CENTER for next";
+            status += " ➡️ CENTER for next";
         } else {
-            status += " - Press CENTER to finish";
+            status += " ✅ CENTER to finish";
         }
         lv_label_set_text(_status_label, status.c_str());
         
         // Update colors for reading mode
-        lv_obj_set_style_text_color(_title_label, lv_color_black(), 0);
-        lv_obj_set_style_text_color(_content_label, lv_color_black(), 0);
+        lv_obj_set_style_text_color(_content_label, lv_color_make(240, 240, 240), 0);
+        lv_obj_set_style_text_color(_status_label, lv_color_make(100, 200, 255), 0);
     }
 }
 
@@ -344,30 +371,11 @@ bool NewsletterCard::shouldRefresh() const {
     return (millis() - _lastRefreshTime) >= REFRESH_INTERVAL;
 }
 
-void NewsletterCard::loadFeedUrl() {
-    // Use a shorter key name to avoid NVS storage issues
-    String key = "rss_url";
-    String url = _config.getConfigValue(key);
-    
-    if (url.length() > 0) {
-        Serial.printf("NewsletterCard: Loaded feed URL from NVS: %s\n", url.c_str());
-        _rssClient.setFeedUrl(url);
-    } else {
-        Serial.println("NewsletterCard: No valid feed URL found, using default PostHog Substack feed");
-        // Set a default feed URL
-        _rssClient.setFeedUrl("https://posthog.substack.com/feed");
-        // Try to save the default URL
-        saveFeedUrl();
-    }
-}
-
-void NewsletterCard::saveFeedUrl() {
-    // Use a shorter key name to avoid NVS storage issues
-    String key = "rss_url";
-    if (_rssClient.getFeedUrl().length() > 0) {
-        _config.setConfigValue(key, _rssClient.getFeedUrl());
-        Serial.printf("NewsletterCard: Saved feed URL: %s\n", _rssClient.getFeedUrl().c_str());
-    }
+void NewsletterCard::initializeFeed() {
+    // Always use PostHog Substack feed - no configuration needed
+    Serial.println("NewsletterCard: Initializing with PostHog Substack feed");
+    _rssClient.setFeedUrl("https://posthog.substack.com/feed");
+    Serial.printf("NewsletterCard: Feed URL set to: %s\n", _rssClient.getFeedUrl().c_str());
 }
 
 void NewsletterCard::handlePeriodicUpdate() {
