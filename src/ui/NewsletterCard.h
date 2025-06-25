@@ -105,7 +105,7 @@ private:
     lv_obj_t* _page_indicator;           ///< Page indicator label
     
     // Constants
-    static constexpr int MAX_LINES_PER_PAGE = 5;   ///< Exactly 5 lines per page for optimal reading
+    static constexpr int MAX_LINES_PER_PAGE = 7;   ///< Exactly 7 lines per page for optimal reading
     static constexpr int REFRESH_INTERVAL = 300000; ///< Refresh interval (5 minutes)
     static constexpr int READING_PADDING = 4;      ///< Minimal padding for reading mode
     static constexpr int IDLE_PADDING = 4;         ///< Minimal padding for idle mode
