@@ -70,6 +70,9 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
             
             // Minimal padding for maximum text display
             lv_obj_set_style_pad_all(_content_label, 2, 0);
+            
+            // Initialize with empty text to prevent "Text" label
+            lv_label_set_text(_content_label, "");
         }
     }
     
@@ -106,8 +109,11 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
             lv_obj_set_size(reading_content, width - (READING_PADDING * 2), height - 40);
             lv_obj_align(reading_content, LV_ALIGN_TOP_LEFT, 0, 18);
             
+            // Initialize with empty text to prevent "Text" label
+            lv_label_set_text(reading_content, "");
+            
             // Store reference to reading content label
-            _content_label = reading_content;
+            _reading_content_label = reading_content;
         }
         
         // Progress indicator removed for cleaner UI
@@ -410,7 +416,7 @@ void NewsletterCard::paginateContent(const String& content) {
         
         // Estimate how many lines this paragraph will take
         // Use a rough estimate: divide character count by average characters per line
-        int avgCharsPerLine = 35; // Conservative estimate allowing for word wrapping
+        int avgCharsPerLine = 30; // Conservative estimate allowing for word wrapping
         int estimatedLines = (paragraphToAdd.length() + avgCharsPerLine - 1) / avgCharsPerLine;
         
         // If adding this paragraph would exceed the page limit, start a new page
@@ -460,8 +466,8 @@ void NewsletterCard::updateReadingDisplay() {
     Serial.printf("NewsletterCard: updateReadingDisplay - page %d of %d\n", _currentPage + 1, _articlePages.size());
     
     if (_currentPage < _articlePages.size()) {
-        // Set the content for current page
-        lv_label_set_text(_content_label, _articlePages[_currentPage].c_str());
+        // Set the content for current page using reading content label
+        lv_label_set_text(_reading_content_label, _articlePages[_currentPage].c_str());
         
         // Update page indicator
         if (_page_indicator) {
@@ -481,7 +487,7 @@ void NewsletterCard::updateReadingDisplay() {
         }
     } else {
         Serial.println("NewsletterCard: ERROR - Current page index out of bounds!");
-        lv_label_set_text(_content_label, "Page error");
+        lv_label_set_text(_reading_content_label, "Page error");
         if (_page_indicator) {
             lv_label_set_text(_page_indicator, "Error: Invalid page");
         }
@@ -652,17 +658,20 @@ void NewsletterCard::removeImageTags(String& content) {
     removeNestedTag(content, "<figure", "</figure>");
     removeNestedTag(content, "<div class=\"captioned-image-container\"", "</div>");
     removeNestedTag(content, "<div class=\"image-container\"", "</div>");
+    removeNestedTag(content, "<div class=\"image\"", "</div>");
+    removeNestedTag(content, "<div class=\"img\"", "</div>");
     removeNestedTag(content, "<picture", "</picture>");
     removeNestedTag(content, "<source", ">");
+    removeNestedTag(content, "<figcaption", "</figcaption>");
     
     // Remove all img tags (including self-closing ones)
     int imgStart = 0;
     while ((imgStart = content.indexOf("<img", imgStart)) != -1) {
         int imgEnd = content.indexOf(">", imgStart);
         if (imgEnd != -1) {
-            // Replace image with placeholder text
-            content = content.substring(0, imgStart) + "[IMAGE]" + content.substring(imgEnd + 1);
-            imgStart += 7; // Length of "[IMAGE]"
+            // Replace image with subtle placeholder
+            content = content.substring(0, imgStart) + "[Image]" + content.substring(imgEnd + 1);
+            imgStart += 7; // Length of "[Image]"
         } else {
             break;
         }

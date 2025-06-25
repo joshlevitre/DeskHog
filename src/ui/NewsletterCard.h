@@ -96,7 +96,8 @@ private:
     // UI Elements
     lv_obj_t* _card;                     ///< Main card container
     lv_obj_t* _title_label;              ///< Title text label
-    lv_obj_t* _content_label;            ///< Content text label
+    lv_obj_t* _content_label;            ///< Content text label (idle mode)
+    lv_obj_t* _reading_content_label;    ///< Content text label (reading mode)
     lv_obj_t* _status_label;             ///< Status/info label
     lv_obj_t* _reading_container;        ///< Container for reading mode layout
     lv_obj_t* _idle_container;           ///< Container for idle mode layout
