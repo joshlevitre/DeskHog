@@ -100,8 +100,8 @@ private:
     lv_obj_t* _status_label;             ///< Status/info label
     
     // Constants
-    static constexpr int MAX_LINES_PER_PAGE = 6;  ///< Maximum lines per page
-    static constexpr int MAX_CHARS_PER_LINE = 32; ///< Maximum characters per line
+    static constexpr int MAX_LINES_PER_PAGE = 5;  ///< Maximum lines per page
+    static constexpr int MAX_CHARS_PER_LINE = 30; ///< Maximum characters per line
     static constexpr int REFRESH_INTERVAL = 300000; ///< Refresh interval (5 minutes)
     unsigned long _lastRefreshTime;      ///< Last refresh timestamp
     
@@ -154,4 +154,18 @@ private:
      * @return Clean plain text content
      */
     String stripHtmlAndDecodeEntities(const String& htmlContent);
+    
+    /**
+     * @brief Remove image tags and media elements from HTML content
+     * @param content The HTML content to process (modified in place)
+     */
+    void removeImageTags(String& content);
+    
+    /**
+     * @brief Remove nested HTML tags and their content
+     * @param content The HTML content to process (modified in place)
+     * @param openTag The opening tag to match
+     * @param closeTag The closing tag to match
+     */
+    void removeNestedTag(String& content, const String& openTag, const String& closeTag);
 }; 

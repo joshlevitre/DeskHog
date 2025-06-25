@@ -132,13 +132,20 @@ bool NewsletterCard::handleButtonPress(uint8_t button_index) {
             
         case DisplayState::READING:
             Serial.println("NewsletterCard: Center button pressed in READING state");
+            Serial.printf("NewsletterCard: Current page: %d, Total pages: %d\n", _currentPage + 1, _articlePages.size());
+            
             // In reading state, center button advances to next page
             if (_currentPage < _articlePages.size() - 1) {
                 _currentPage++;
+                Serial.printf("NewsletterCard: Advancing to page %d\n", _currentPage + 1);
                 updateReadingDisplay();
             } else {
                 // End of article, return to idle
+                Serial.println("NewsletterCard: Reached end of article, returning to idle");
                 _currentState = DisplayState::IDLE;
+                _currentArticle = nullptr;
+                _currentPage = 0;
+                _articlePages.clear();
                 updateDisplay();
             }
             return true;
@@ -281,60 +288,116 @@ void NewsletterCard::showReadingState() {
         // Set reading mode colors
         lv_obj_set_style_text_color(_title_label, lv_color_make(255, 255, 100), 0);
         
+        // Force state change to READING
+        _currentState = DisplayState::READING;
+        
         updateReadingDisplay();
     }
 }
 
 void NewsletterCard::paginateContent(const String& content) {
+    Serial.println("NewsletterCard: Starting content pagination...");
     _articlePages.clear();
     
     if (content.length() == 0) {
         _articlePages.push_back("No content available");
+        Serial.println("NewsletterCard: No content to paginate");
         return;
     }
     
-    // Split content into words
-    std::vector<String> words;
+    Serial.printf("NewsletterCard: Paginating content of length: %d\n", content.length());
+    
+    // Split content into paragraphs first, then handle line breaking
+    std::vector<String> paragraphs;
     int start = 0;
-    int end = content.indexOf(' ');
+    int pos = 0;
     
-    while (end != -1) {
-        words.push_back(content.substring(start, end));
-        start = end + 1;
-        end = content.indexOf(' ', start);
-    }
-    // Add the last word
-    if (start < content.length()) {
-        words.push_back(content.substring(start));
+    // Split by double newlines (paragraph breaks)
+    while (pos < content.length()) {
+        int nextPara = content.indexOf("\n\n", pos);
+        if (nextPara == -1) {
+            nextPara = content.length();
+        }
+        
+        String paragraph = content.substring(pos, nextPara);
+        paragraph.trim();
+        if (paragraph.length() > 0) {
+            paragraphs.push_back(paragraph);
+        }
+        pos = nextPara + 2;
     }
     
-    // Build pages
+    Serial.printf("NewsletterCard: Found %d paragraphs\n", paragraphs.size());
+    
+    // Build pages with better formatting
     String currentPage = "";
-    int currentLineLength = 0;
     int currentLineCount = 0;
     
-    for (const String& word : words) {
-        // Check if adding this word would exceed line length
-        if (currentLineLength + word.length() + 1 > MAX_CHARS_PER_LINE) {
-            currentPage += "\n";
-            currentLineCount++;
-            currentLineLength = 0;
-            
-            // Check if we've exceeded page height
-            if (currentLineCount >= MAX_LINES_PER_PAGE) {
-                _articlePages.push_back(currentPage);
-                currentPage = "";
-                currentLineCount = 0;
+    for (const String& paragraph : paragraphs) {
+        // Process each paragraph word by word
+        std::vector<String> words;
+        int wordStart = 0;
+        int wordEnd = paragraph.indexOf(' ');
+        
+        while (wordEnd != -1) {
+            words.push_back(paragraph.substring(wordStart, wordEnd));
+            wordStart = wordEnd + 1;
+            wordEnd = paragraph.indexOf(' ', wordStart);
+        }
+        if (wordStart < paragraph.length()) {
+            words.push_back(paragraph.substring(wordStart));
+        }
+        
+        // Build lines for this paragraph
+        String currentLine = "";
+        for (const String& word : words) {
+            // Check if adding this word would exceed line length
+            if (currentLine.length() + word.length() + 1 > MAX_CHARS_PER_LINE) {
+                // Add current line to page
+                if (currentPage.length() > 0) {
+                    currentPage += "\n";
+                }
+                currentPage += currentLine;
+                currentLineCount++;
+                
+                // Check if we need a new page
+                if (currentLineCount >= MAX_LINES_PER_PAGE) {
+                    _articlePages.push_back(currentPage);
+                    currentPage = "";
+                    currentLineCount = 0;
+                }
+                
+                currentLine = word; // Start new line with this word
+            } else {
+                // Add word to current line
+                if (currentLine.length() > 0) {
+                    currentLine += " ";
+                }
+                currentLine += word;
             }
         }
         
-        // Add word to current line
-        if (currentLineLength > 0) {
-            currentPage += " ";
-            currentLineLength++;
+        // Add the last line of the paragraph
+        if (currentLine.length() > 0) {
+            if (currentPage.length() > 0) {
+                currentPage += "\n";
+            }
+            currentPage += currentLine;
+            currentLineCount++;
         }
-        currentPage += word;
-        currentLineLength += word.length();
+        
+        // Add paragraph break (but don't exceed page limit)
+        if (currentLineCount < MAX_LINES_PER_PAGE - 1) {
+            currentPage += "\n";
+            currentLineCount++;
+        }
+        
+        // Check if we need a new page after this paragraph
+        if (currentLineCount >= MAX_LINES_PER_PAGE) {
+            _articlePages.push_back(currentPage);
+            currentPage = "";
+            currentLineCount = 0;
+        }
     }
     
     // Add the last page if it has content
@@ -344,26 +407,48 @@ void NewsletterCard::paginateContent(const String& content) {
     
     // If no pages were created, add a default message
     if (_articlePages.empty()) {
-        _articlePages.push_back("Content too short to display");
+        _articlePages.push_back("Content could not be parsed");
+    }
+    
+    Serial.printf("NewsletterCard: Created %d pages\n", _articlePages.size());
+    
+    // Debug: show first page preview
+    if (_articlePages.size() > 0) {
+        String preview = _articlePages[0].substring(0, min(100, (int)_articlePages[0].length()));
+        Serial.printf("NewsletterCard: First page preview: %s...\n", preview.c_str());
     }
 }
 
 void NewsletterCard::updateReadingDisplay() {
+    Serial.printf("NewsletterCard: updateReadingDisplay - page %d of %d\n", _currentPage + 1, _articlePages.size());
+    
     if (_currentPage < _articlePages.size()) {
+        // Set the content for current page
         lv_label_set_text(_content_label, _articlePages[_currentPage].c_str());
         
-        // Create attractive page indicator
-        String status = "📜 " + String(_currentPage + 1) + "/" + String(_articlePages.size());
+        // Create attractive page indicator with clear navigation
+        String status = "📖 Page " + String(_currentPage + 1) + "/" + String(_articlePages.size());
         if (_currentPage < _articlePages.size() - 1) {
-            status += " ➡️ CENTER for next";
+            status += "\n👆 CENTER = Next page";
         } else {
-            status += " ✅ CENTER to finish";
+            status += "\n👆 CENTER = Exit reading";
         }
         lv_label_set_text(_status_label, status.c_str());
         
         // Update colors for reading mode
         lv_obj_set_style_text_color(_content_label, lv_color_make(240, 240, 240), 0);
         lv_obj_set_style_text_color(_status_label, lv_color_make(100, 200, 255), 0);
+        
+        // Debug output
+        Serial.printf("NewsletterCard: Displaying page content length: %d\n", _articlePages[_currentPage].length());
+        if (_articlePages[_currentPage].length() > 0) {
+            String preview = _articlePages[_currentPage].substring(0, min(50, (int)_articlePages[_currentPage].length()));
+            Serial.printf("NewsletterCard: Page preview: %s...\n", preview.c_str());
+        }
+    } else {
+        Serial.println("NewsletterCard: ERROR - Current page index out of bounds!");
+        lv_label_set_text(_content_label, "Page error");
+        lv_label_set_text(_status_label, "Error: Invalid page");
     }
 }
 
@@ -394,6 +479,9 @@ String NewsletterCard::stripHtmlAndDecodeEntities(const String& htmlContent) {
     
     String cleanedContent = htmlContent;
     
+    // Remove image containers and complex media elements first
+    removeImageTags(cleanedContent);
+    
     // First, decode common HTML entities
     cleanedContent.replace("&amp;", "&");
     cleanedContent.replace("&lt;", "<");
@@ -415,28 +503,52 @@ String NewsletterCard::stripHtmlAndDecodeEntities(const String& htmlContent) {
     
     Serial.println("NewsletterCard: HTML entities decoded");
     
-    // Handle paragraph tags specifically for better formatting
-    cleanedContent.replace("<p>", "\n");
-    cleanedContent.replace("</p>", "\n");
+    // Handle structural tags with better formatting
+    cleanedContent.replace("<h1>", "\n\n== ");
+    cleanedContent.replace("</h1>", " ==\n");
+    cleanedContent.replace("<h2>", "\n\n-- ");
+    cleanedContent.replace("</h2>", " --\n");
+    cleanedContent.replace("<h3>", "\n\n* ");
+    cleanedContent.replace("</h3>", " *\n");
+    cleanedContent.replace("<h4>", "\n\n+ ");
+    cleanedContent.replace("</h4>", " +\n");
+    cleanedContent.replace("<h5>", "\n\n> ");
+    cleanedContent.replace("</h5>", " <\n");
+    cleanedContent.replace("<h6>", "\n\n~ ");
+    cleanedContent.replace("</h6>", " ~\n");
+    
+    // Handle paragraph and line breaks
+    cleanedContent.replace("<p>", "\n\n");
+    cleanedContent.replace("</p>", "");
     cleanedContent.replace("<br>", "\n");
     cleanedContent.replace("<br/>", "\n");
     cleanedContent.replace("<br />", "\n");
+    
+    // Handle lists with better formatting
+    cleanedContent.replace("<ul>", "\n");
+    cleanedContent.replace("</ul>", "\n");
+    cleanedContent.replace("<ol>", "\n");
+    cleanedContent.replace("</ol>", "\n");
+    cleanedContent.replace("<li>", "\n• ");
+    cleanedContent.replace("</li>", "");
+    
+    // Handle divs and spans
     cleanedContent.replace("<div>", "\n");
     cleanedContent.replace("</div>", "\n");
-    cleanedContent.replace("<h1>", "\n");
-    cleanedContent.replace("</h1>", "\n");
-    cleanedContent.replace("<h2>", "\n");
-    cleanedContent.replace("</h2>", "\n");
-    cleanedContent.replace("<h3>", "\n");
-    cleanedContent.replace("</h3>", "\n");
-    cleanedContent.replace("<h4>", "\n");
-    cleanedContent.replace("</h4>", "\n");
-    cleanedContent.replace("<h5>", "\n");
-    cleanedContent.replace("</h5>", "\n");
-    cleanedContent.replace("<h6>", "\n");
-    cleanedContent.replace("</h6>", "\n");
+    cleanedContent.replace("<span>", "");
+    cleanedContent.replace("</span>", "");
     
-    // Remove HTML tags (general approach for remaining tags)
+    // Handle emphasis tags
+    cleanedContent.replace("<strong>", "*");
+    cleanedContent.replace("</strong>", "*");
+    cleanedContent.replace("<b>", "*");
+    cleanedContent.replace("</b>", "*");
+    cleanedContent.replace("<em>", "_");
+    cleanedContent.replace("</em>", "_");
+    cleanedContent.replace("<i>", "_");
+    cleanedContent.replace("</i>", "_");
+    
+    // Remove all remaining HTML tags
     int tagStart = cleanedContent.indexOf('<');
     while (tagStart != -1) {
         int tagEnd = cleanedContent.indexOf('>', tagStart);
@@ -460,13 +572,13 @@ String NewsletterCard::stripHtmlAndDecodeEntities(const String& htmlContent) {
         cleanedContent.replace("  ", " ");
     }
     
-    // Replace multiple newlines with double newline for paragraph separation
+    // Clean up excessive newlines but preserve paragraph structure
+    while (cleanedContent.indexOf("\n\n\n\n") != -1) {
+        cleanedContent.replace("\n\n\n\n", "\n\n");
+    }
     while (cleanedContent.indexOf("\n\n\n") != -1) {
         cleanedContent.replace("\n\n\n", "\n\n");
     }
-    
-    // Ensure paragraphs are separated by double newlines
-    cleanedContent.replace("\n\n", "\n \n");
     
     // Trim leading/trailing whitespace
     cleanedContent.trim();
@@ -483,4 +595,75 @@ String NewsletterCard::stripHtmlAndDecodeEntities(const String& htmlContent) {
     }
     
     return cleanedContent;
+}
+
+void NewsletterCard::removeImageTags(String& content) {
+    Serial.println("NewsletterCard: Removing image tags and media elements...");
+    
+    // Remove complex image containers and figures
+    removeNestedTag(content, "<figure", "</figure>");
+    removeNestedTag(content, "<div class=\"captioned-image-container\"", "</div>");
+    removeNestedTag(content, "<div class=\"image-container\"", "</div>");
+    removeNestedTag(content, "<picture", "</picture>");
+    removeNestedTag(content, "<source", ">");
+    
+    // Remove all img tags (including self-closing ones)
+    int imgStart = 0;
+    while ((imgStart = content.indexOf("<img", imgStart)) != -1) {
+        int imgEnd = content.indexOf(">", imgStart);
+        if (imgEnd != -1) {
+            // Replace image with placeholder text
+            content = content.substring(0, imgStart) + "[IMAGE]" + content.substring(imgEnd + 1);
+            imgStart += 7; // Length of "[IMAGE]"
+        } else {
+            break;
+        }
+    }
+    
+    // Remove SVG elements
+    removeNestedTag(content, "<svg", "</svg>");
+    
+    // Remove script and style tags
+    removeNestedTag(content, "<script", "</script>");
+    removeNestedTag(content, "<style", "</style>");
+    
+    // Remove other media-related tags
+    removeNestedTag(content, "<video", "</video>");
+    removeNestedTag(content, "<audio", "</audio>");
+    removeNestedTag(content, "<iframe", "</iframe>");
+    removeNestedTag(content, "<canvas", "</canvas>");
+    
+    Serial.println("NewsletterCard: Image and media removal complete");
+}
+
+void NewsletterCard::removeNestedTag(String& content, const String& openTag, const String& closeTag) {
+    int tagStart = 0;
+    while ((tagStart = content.indexOf(openTag, tagStart)) != -1) {
+        // Find the end of the opening tag
+        int openEnd = content.indexOf(">", tagStart);
+        if (openEnd == -1) break;
+        
+        // Check if it's a self-closing tag
+        if (content.charAt(openEnd - 1) == '/') {
+            // Self-closing tag
+            content.remove(tagStart, openEnd - tagStart + 1);
+            continue;
+        }
+        
+        // Find the matching closing tag
+        int closeStart = content.indexOf(closeTag, openEnd);
+        if (closeStart != -1) {
+            int closeEnd = content.indexOf(">", closeStart);
+            if (closeEnd != -1) {
+                // Remove the entire tag and its content
+                content.remove(tagStart, closeEnd - tagStart + 1);
+            } else {
+                // Malformed closing tag
+                content.remove(tagStart, closeStart - tagStart + closeTag.length());
+            }
+        } else {
+            // No closing tag found, remove just the opening tag
+            content.remove(tagStart, openEnd - tagStart + 1);
+        }
+    }
 } 
