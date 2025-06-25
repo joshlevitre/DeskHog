@@ -90,8 +90,11 @@ private:
     RssClient& _rssClient;               ///< RSS client reference
     DisplayState _currentState;          ///< Current display state
     const RssItem* _currentArticle;      ///< Currently displayed article
-    int _currentPage;                    ///< Current page in article
-    std::vector<String> _articlePages;   ///< Paginated article content
+    
+    // Character-based scrolling variables
+    String _fullArticleText;             ///< Full article text for character scrolling
+    int _currentCharOffset;              ///< Current character offset for scrolling
+    int _maxVisibleLines;                ///< Maximum lines visible on screen
     
     // UI Elements
     lv_obj_t* _card;                     ///< Main card container
@@ -102,12 +105,11 @@ private:
     lv_obj_t* _reading_container;        ///< Container for reading mode layout
     lv_obj_t* _idle_container;           ///< Container for idle mode layout
     lv_obj_t* _progress_bar;             ///< Progress indicator label for reading mode
-    lv_obj_t* _page_indicator;           ///< Page indicator label
     
     // Constants
-    static constexpr int MAX_LINES_PER_PAGE = 7;   ///< Exactly 7 lines per page for optimal reading
+    static constexpr int MAX_LINES_PER_PAGE = 9;   ///< Increased to 9 lines per page for better content visibility
     static constexpr int REFRESH_INTERVAL = 300000; ///< Refresh interval (5 minutes)
-    static constexpr int READING_PADDING = 4;      ///< Minimal padding for reading mode
+    static constexpr int READING_PADDING = 4;
     static constexpr int IDLE_PADDING = 4;         ///< Minimal padding for idle mode
     unsigned long _lastRefreshTime;      ///< Last refresh timestamp
     
@@ -131,12 +133,6 @@ private:
      * @brief Switch to reading state
      */
     void showReadingState();
-    
-    /**
-     * @brief Paginate article content for display
-     * @param content The full article content
-     */
-    void paginateContent(const String& content);
     
     /**
      * @brief Update the reading display with current page
@@ -174,4 +170,11 @@ private:
      * @param closeTag The closing tag to match
      */
     void removeNestedTag(String& content, const String& openTag, const String& closeTag);
+    
+    /**
+     * @brief Remove HTML attributes that might contain image data
+     * @param content The HTML content to process (modified in place)
+     * @param attribute The attribute to remove
+     */
+    void removeAttribute(String& content, const String& attribute);
 }; 

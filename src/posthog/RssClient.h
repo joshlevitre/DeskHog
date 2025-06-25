@@ -151,4 +151,25 @@ private:
      * @return The extracted content
      */
     String extractTagContent(const String& xmlContent, const String& tagName);
+    
+    /**
+     * @brief Remove image tags and media elements from HTML content
+     * @param content The HTML content to process (modified in place)
+     */
+    void removeImageTags(String& content);
+    
+    /**
+     * @brief Remove nested HTML tags and their content
+     * @param content The HTML content to process (modified in place)
+     * @param openTag The opening tag to match
+     * @param closeTag The closing tag to match
+     */
+    void removeNestedTag(String& content, const String& openTag, const String& closeTag);
+    
+    /**
+     * @brief Remove HTML attributes that might contain image data
+     * @param content The HTML content to process (modified in place)
+     * @param attribute The attribute to remove
+     */
+    void removeAttribute(String& content, const String& attribute);
 }; 

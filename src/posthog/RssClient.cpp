@@ -230,6 +230,9 @@ String RssClient::extractTextFromHtml(const String& html) {
         return "";
     }
     
+    // Remove images and media first
+    removeImageTags(result);
+    
     // Handle paragraph tags first for better formatting
     result.replace("<p>", "\n\n");
     result.replace("</p>", "");
@@ -466,4 +469,139 @@ String RssClient::decodeHtmlEntities(const String& html) {
     result.replace("&rdquo;", "\"");
     
     return result;
+}
+
+void RssClient::removeImageTags(String& content) {
+    // Remove complex image containers and figures
+    removeNestedTag(content, "<figure", "</figure>");
+    removeNestedTag(content, "<div class=\"captioned-image-container\"", "</div>");
+    removeNestedTag(content, "<div class=\"image-container\"", "</div>");
+    removeNestedTag(content, "<div class=\"image\"", "</div>");
+    removeNestedTag(content, "<div class=\"img\"", "</div>");
+    removeNestedTag(content, "<picture", "</picture>");
+    removeNestedTag(content, "<source", ">");
+    removeNestedTag(content, "<figcaption", "</figcaption>");
+    
+    // Remove all img tags (including self-closing ones) - more aggressive approach
+    int imgStart = 0;
+    while ((imgStart = content.indexOf("<img", imgStart)) != -1) {
+        int imgEnd = content.indexOf(">", imgStart);
+        if (imgEnd != -1) {
+            // Remove image completely
+            content = content.substring(0, imgStart) + content.substring(imgEnd + 1);
+        } else {
+            // If no closing tag found, remove from img start to end
+            content = content.substring(0, imgStart);
+            break;
+        }
+    }
+    
+    // Remove any remaining img tags with different casing
+    imgStart = 0;
+    while ((imgStart = content.indexOf("<IMG", imgStart)) != -1) {
+        int imgEnd = content.indexOf(">", imgStart);
+        if (imgEnd != -1) {
+            content = content.substring(0, imgStart) + content.substring(imgEnd + 1);
+        } else {
+            content = content.substring(0, imgStart);
+            break;
+        }
+    }
+    
+    // Remove SVG elements
+    removeNestedTag(content, "<svg", "</svg>");
+    removeNestedTag(content, "<SVG", "</SVG>");
+    
+    // Remove script and style tags
+    removeNestedTag(content, "<script", "</script>");
+    removeNestedTag(content, "<style", "</style>");
+    
+    // Remove other media-related tags
+    removeNestedTag(content, "<video", "</video>");
+    removeNestedTag(content, "<audio", "</audio>");
+    removeNestedTag(content, "<iframe", "</iframe>");
+    removeNestedTag(content, "<canvas", "</canvas>");
+    removeNestedTag(content, "<embed", "</embed>");
+    removeNestedTag(content, "<object", "</object>");
+    removeNestedTag(content, "<param", ">");
+    
+    // Remove social media embeds and widgets
+    removeNestedTag(content, "<div class=\"twitter-tweet\"", "</div>");
+    removeNestedTag(content, "<div class=\"instagram-media\"", "</div>");
+    removeNestedTag(content, "<div class=\"fb-post\"", "</div>");
+    removeNestedTag(content, "<div class=\"youtube-embed\"", "</div>");
+    
+    // Remove any remaining divs with image-related classes
+    removeNestedTag(content, "<div class=\"image\"", "</div>");
+    removeNestedTag(content, "<div class=\"img\"", "</div>");
+    removeNestedTag(content, "<div class=\"photo\"", "</div>");
+    removeNestedTag(content, "<div class=\"media\"", "</div>");
+    removeNestedTag(content, "<div class=\"embed\"", "</div>");
+    
+    // Remove data URLs and base64 encoded content that might be images
+    int dataStart = 0;
+    while ((dataStart = content.indexOf("data:image/", dataStart)) != -1) {
+        int dataEnd = content.indexOf("\"", dataStart);
+        if (dataEnd != -1) {
+            // Remove the entire data URL
+            content = content.substring(0, dataStart) + content.substring(dataEnd + 1);
+        } else {
+            // If no closing quote, remove from data start to end
+            content = content.substring(0, dataStart);
+            break;
+        }
+    }
+    
+    // Remove any remaining image-related attributes
+    removeAttribute(content, "src=\"data:image/");
+    removeAttribute(content, "background=\"data:image/");
+    removeAttribute(content, "style=\"background-image:");
+}
+
+void RssClient::removeNestedTag(String& content, const String& openTag, const String& closeTag) {
+    int tagStart = 0;
+    while ((tagStart = content.indexOf(openTag, tagStart)) != -1) {
+        // Find the end of the opening tag
+        int openEnd = content.indexOf(">", tagStart);
+        if (openEnd == -1) break;
+        
+        // Check if it's a self-closing tag
+        if (content.charAt(openEnd - 1) == '/') {
+            // Self-closing tag
+            content.remove(tagStart, openEnd - tagStart + 1);
+            continue;
+        }
+        
+        // Find the matching closing tag
+        int closeStart = content.indexOf(closeTag, openEnd);
+        if (closeStart != -1) {
+            int closeEnd = content.indexOf(">", closeStart);
+            if (closeEnd != -1) {
+                // Remove the entire tag and its content
+                content.remove(tagStart, closeEnd - tagStart + 1);
+            } else {
+                // Malformed closing tag
+                content.remove(tagStart, closeStart - tagStart + closeTag.length());
+            }
+        } else {
+            // No closing tag found, remove just the opening tag
+            content.remove(tagStart, openEnd - tagStart + 1);
+        }
+    }
+}
+
+void RssClient::removeAttribute(String& content, const String& attribute) {
+    int attrStart = 0;
+    while ((attrStart = content.indexOf(attribute, attrStart)) != -1) {
+        int attrEnd = content.indexOf(" ", attrStart);
+        if (attrEnd == -1) {
+            attrEnd = content.indexOf(">", attrStart);
+        }
+        if (attrEnd != -1) {
+            content.remove(attrStart, attrEnd - attrStart);
+        } else {
+            // If no closing tag, remove from attr start to end
+            content.remove(attrStart);
+        }
+    }
 } 

@@ -5,7 +5,8 @@
 NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQueue& eventQueue,
                                RssClient& rssClient, uint16_t width, uint16_t height)
     : _config(config), _eventQueue(eventQueue), _rssClient(rssClient),
-      _currentState(DisplayState::IDLE), _currentArticle(nullptr), _currentPage(0), _lastRefreshTime(0) {
+      _currentState(DisplayState::IDLE), _currentArticle(nullptr), _lastRefreshTime(0),
+      _currentCharOffset(0), _maxVisibleLines(9) {
     
     Serial.println("NewsletterCard: Constructor called");
     
@@ -62,7 +63,7 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
         if (_content_label) {
             lv_obj_set_style_text_color(_content_label, lv_color_make(220, 220, 220), 0);
             lv_obj_set_style_text_font(_content_label, Style::valueFont(), 0);
-            lv_obj_set_style_text_line_space(_content_label, 10, 0);
+            lv_obj_set_style_text_line_space(_content_label, 4, 0);
             lv_obj_set_style_text_align(_content_label, LV_TEXT_ALIGN_LEFT, 0);
             lv_label_set_long_mode(_content_label, LV_LABEL_LONG_WRAP);
             lv_obj_set_size(_content_label, width - (IDLE_PADDING * 2), height - 40);
@@ -103,11 +104,18 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
         if (reading_content) {
             lv_obj_set_style_text_color(reading_content, lv_color_make(240, 240, 240), 0);
             lv_obj_set_style_text_font(reading_content, Style::valueFont(), 0);
-            lv_obj_set_style_text_line_space(reading_content, 12, 0);
+            lv_obj_set_style_text_line_space(reading_content, 6, 0);
             lv_obj_set_style_text_align(reading_content, LV_TEXT_ALIGN_LEFT, 0);
             lv_label_set_long_mode(reading_content, LV_LABEL_LONG_WRAP);
-            lv_obj_set_size(reading_content, width - (READING_PADDING * 2), height - 40);
+            
+            // Use full available space to eliminate black bar
+            lv_obj_set_size(reading_content, width - (READING_PADDING * 2), height - (READING_PADDING * 2) - 20);
             lv_obj_align(reading_content, LV_ALIGN_TOP_LEFT, 0, 18);
+            
+            // Set minimal padding to maximize text area
+            lv_obj_set_style_pad_all(reading_content, 1, 0);
+            lv_obj_set_style_pad_left(reading_content, 2, 0);
+            lv_obj_set_style_pad_right(reading_content, 2, 0);
             
             // Initialize with empty text to prevent "Text" label
             lv_label_set_text(reading_content, "");
@@ -117,15 +125,6 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
         }
         
         // Progress indicator removed for cleaner UI
-        
-        // Create page indicator
-        _page_indicator = lv_label_create(_reading_container);
-        if (_page_indicator) {
-            lv_obj_set_style_text_color(_page_indicator, lv_color_make(150, 150, 170), 0);
-            lv_obj_set_style_text_font(_page_indicator, Style::labelFont(), 0);
-            lv_obj_align(_page_indicator, LV_ALIGN_BOTTOM_LEFT, 0, -5);
-            lv_obj_set_style_text_align(_page_indicator, LV_TEXT_ALIGN_LEFT, 0);
-        }
         
         // Navigation hint removed for cleaner UI
     }
@@ -165,9 +164,6 @@ bool NewsletterCard::handleButtonPress(uint8_t button_index) {
                 Serial.println("NewsletterCard: Found existing newsletter, opening...");
                 // Open the latest newsletter directly
                 _currentArticle = _rssClient.getLatestItem();
-                String cleanedContent = stripHtmlAndDecodeEntities(_currentArticle->content);
-                paginateContent(cleanedContent);
-                _currentPage = 0;
                 showReadingState();
             } else {
                 Serial.println("NewsletterCard: No newsletter available, refreshing feed...");
@@ -181,30 +177,39 @@ bool NewsletterCard::handleButtonPress(uint8_t button_index) {
             // In notification state, center button opens the article
             if (_rssClient.getLatestItem()) {
                 _currentArticle = _rssClient.getLatestItem();
-                String cleanedContent = stripHtmlAndDecodeEntities(_currentArticle->content);
-                paginateContent(cleanedContent);
-                _currentPage = 0;
                 showReadingState();
             }
             return true;
             
         case DisplayState::READING:
             Serial.println("NewsletterCard: Center button pressed in READING state");
-            Serial.printf("NewsletterCard: Current page: %d, Total pages: %d\n", _currentPage + 1, _articlePages.size());
-            
-            // In reading state, center button advances to next page
-            if (_currentPage < _articlePages.size() - 1) {
-                _currentPage++;
-                Serial.printf("NewsletterCard: Advancing to page %d\n", _currentPage + 1);
+            // In reading state, center button scrolls 45 characters forward to next word boundary
+            if (_currentCharOffset + 45 < _fullArticleText.length()) {
+                int newOffset = _currentCharOffset + 45;
+                
+                // Find the next word boundary (space, newline, or end of text)
+                while (newOffset < _fullArticleText.length() && 
+                       _fullArticleText.charAt(newOffset) != ' ' && 
+                       _fullArticleText.charAt(newOffset) != '\n' &&
+                       _fullArticleText.charAt(newOffset) != '\t') {
+                    newOffset++;
+                }
+                
+                // Skip any leading whitespace to start at the beginning of the next word
+                while (newOffset < _fullArticleText.length() && 
+                       (_fullArticleText.charAt(newOffset) == ' ' || 
+                        _fullArticleText.charAt(newOffset) == '\n' ||
+                        _fullArticleText.charAt(newOffset) == '\t')) {
+                    newOffset++;
+                }
+                
+                _currentCharOffset = newOffset;
                 updateReadingDisplay();
             } else {
-                // End of article, return to idle
-                Serial.println("NewsletterCard: Reached end of article, returning to idle");
-                _currentState = DisplayState::IDLE;
-                _currentArticle = nullptr;
-                _currentPage = 0;
-                _articlePages.clear();
-                updateDisplay();
+                // Reached end of content, return to idle state
+                Serial.println("NewsletterCard: Reached end of content, returning to idle");
+                _currentCharOffset = 0;
+                showIdleState();
             }
             return true;
     }
@@ -359,6 +364,12 @@ void NewsletterCard::showReadingState() {
             lv_label_set_text(reading_title, displayTitle.c_str());
         }
         
+        // Initialize line-by-line scrolling
+        String cleanedContent = stripHtmlAndDecodeEntities(_currentArticle->content);
+        _fullArticleText = cleanedContent;
+        _currentCharOffset = 0;
+        _maxVisibleLines = MAX_LINES_PER_PAGE;
+        
         // Force state change to READING
         _currentState = DisplayState::READING;
         
@@ -366,131 +377,27 @@ void NewsletterCard::showReadingState() {
     }
 }
 
-void NewsletterCard::paginateContent(const String& content) {
-    Serial.println("NewsletterCard: Starting content pagination...");
-    _articlePages.clear();
-    
-    if (content.length() == 0) {
-        _articlePages.push_back("No content available");
-        Serial.println("NewsletterCard: No content to paginate");
-        return;
-    }
-    
-    Serial.printf("NewsletterCard: Paginating content of length: %d\n", content.length());
-    
-    // Split content into paragraphs first, then handle line breaking
-    std::vector<String> paragraphs;
-    int start = 0;
-    int pos = 0;
-    
-    // Split by double newlines (paragraph breaks)
-    while (pos < content.length()) {
-        int nextPara = content.indexOf("\n\n", pos);
-        if (nextPara == -1) {
-            nextPara = content.length();
-        }
-        
-        String paragraph = content.substring(pos, nextPara);
-        paragraph.trim();
-        if (paragraph.length() > 0) {
-            paragraphs.push_back(paragraph);
-        }
-        pos = nextPara + 2;
-    }
-    
-    Serial.printf("NewsletterCard: Found %d paragraphs\n", paragraphs.size());
-    
-    // Build pages with proper word wrapping - let LVGL handle line breaks
-    String currentPage = "";
-    int currentLineCount = 0;
-    
-    for (const String& paragraph : paragraphs) {
-        // Add paragraph to current page
-        String paragraphToAdd = paragraph;
-        
-        // If this is not the first content on the page, add a line break
-        if (currentPage.length() > 0) {
-            paragraphToAdd = "\n" + paragraphToAdd;
-            currentLineCount++;
-        }
-        
-        // Estimate how many lines this paragraph will take
-        // Use a rough estimate: divide character count by average characters per line
-        int avgCharsPerLine = 30; // Conservative estimate allowing for word wrapping
-        int estimatedLines = (paragraphToAdd.length() + avgCharsPerLine - 1) / avgCharsPerLine;
-        
-        // If adding this paragraph would exceed the page limit, start a new page
-        if (currentLineCount + estimatedLines > MAX_LINES_PER_PAGE && currentPage.length() > 0) {
-            _articlePages.push_back(currentPage);
-            currentPage = paragraph; // Start new page with this paragraph
-            currentLineCount = estimatedLines;
-        } else {
-            currentPage += paragraphToAdd;
-            currentLineCount += estimatedLines;
-        }
-        
-        // If we've filled the page, start a new one
-        if (currentLineCount >= MAX_LINES_PER_PAGE) {
-            _articlePages.push_back(currentPage);
-            currentPage = "";
-            currentLineCount = 0;
-        } else {
-            // Add spacing between paragraphs if there's room
-            if (currentLineCount < MAX_LINES_PER_PAGE - 1) {
-                currentPage += "\n";
-                currentLineCount++;
-            }
-        }
-    }
-    
-    // Add the last page if it has content
-    if (currentPage.length() > 0) {
-        _articlePages.push_back(currentPage);
-    }
-    
-    // If no pages were created, add a default message
-    if (_articlePages.empty()) {
-        _articlePages.push_back("Content could not be parsed");
-    }
-    
-    Serial.printf("NewsletterCard: Created %d pages\n", _articlePages.size());
-    
-    // Debug: show first page preview
-    if (_articlePages.size() > 0) {
-        String preview = _articlePages[0].substring(0, min(100, (int)_articlePages[0].length()));
-        Serial.printf("NewsletterCard: First page preview: %s...\n", preview.c_str());
-    }
-}
-
 void NewsletterCard::updateReadingDisplay() {
-    Serial.printf("NewsletterCard: updateReadingDisplay - page %d of %d\n", _currentPage + 1, _articlePages.size());
+    Serial.printf("NewsletterCard: updateReadingDisplay - char offset %d\n", _currentCharOffset);
     
-    if (_currentPage < _articlePages.size()) {
-        // Set the content for current page using reading content label
-        lv_label_set_text(_reading_content_label, _articlePages[_currentPage].c_str());
+    if (_fullArticleText.length() > 0) {
+        // Get the text starting from the current character offset
+        String displayText = "";
+        int startPos = _currentCharOffset;
         
-        // Update page indicator
-        if (_page_indicator) {
-            String pageText = "Page " + String(_currentPage + 1) + "/" + String(_articlePages.size());
-            lv_label_set_text(_page_indicator, pageText.c_str());
+        if (startPos < _fullArticleText.length()) {
+            // Get the text from current offset to end, or a reasonable chunk
+            int endPos = min(startPos + 500, (int)_fullArticleText.length()); // Show up to 500 chars
+            displayText = _fullArticleText.substring(startPos, endPos);
         }
         
-        // Progress indicator removed
+        // Set the content for current view
+        lv_label_set_text(_reading_content_label, displayText.c_str());
         
-        // Navigation hint removed
-        
-        // Debug output
-        Serial.printf("NewsletterCard: Displaying page content length: %d\n", _articlePages[_currentPage].length());
-        if (_articlePages[_currentPage].length() > 0) {
-            String preview = _articlePages[_currentPage].substring(0, min(50, (int)_articlePages[_currentPage].length()));
-            Serial.printf("NewsletterCard: Page preview: %s...\n", preview.c_str());
-        }
+        Serial.printf("NewsletterCard: Displaying text from char %d, length: %d\n", startPos, displayText.length());
     } else {
-        Serial.println("NewsletterCard: ERROR - Current page index out of bounds!");
-        lv_label_set_text(_reading_content_label, "Page error");
-        if (_page_indicator) {
-            lv_label_set_text(_page_indicator, "Error: Invalid page");
-        }
+        Serial.println("NewsletterCard: ERROR - No article text available!");
+        lv_label_set_text(_reading_content_label, "No content available");
     }
 }
 
@@ -535,6 +442,11 @@ String NewsletterCard::stripHtmlAndDecodeEntities(const String& htmlContent) {
     
     // Remove image containers and complex media elements first
     removeImageTags(cleanedContent);
+    
+    // Remove any remaining script and style content
+    removeNestedTag(cleanedContent, "<script", "</script>");
+    removeNestedTag(cleanedContent, "<style", "</style>");
+    removeNestedTag(cleanedContent, "<noscript", "</noscript>");
     
     // First, decode common HTML entities
     cleanedContent.replace("&amp;", "&");
@@ -664,21 +576,35 @@ void NewsletterCard::removeImageTags(String& content) {
     removeNestedTag(content, "<source", ">");
     removeNestedTag(content, "<figcaption", "</figcaption>");
     
-    // Remove all img tags (including self-closing ones)
+    // Remove all img tags (including self-closing ones) - more aggressive approach
     int imgStart = 0;
     while ((imgStart = content.indexOf("<img", imgStart)) != -1) {
         int imgEnd = content.indexOf(">", imgStart);
         if (imgEnd != -1) {
-            // Replace image with subtle placeholder
-            content = content.substring(0, imgStart) + "[Image]" + content.substring(imgEnd + 1);
-            imgStart += 7; // Length of "[Image]"
+            // Remove image completely instead of replacing with placeholder
+            content = content.substring(0, imgStart) + content.substring(imgEnd + 1);
         } else {
+            // If no closing tag found, remove from img start to end
+            content = content.substring(0, imgStart);
+            break;
+        }
+    }
+    
+    // Remove any remaining img tags with different casing
+    imgStart = 0;
+    while ((imgStart = content.indexOf("<IMG", imgStart)) != -1) {
+        int imgEnd = content.indexOf(">", imgStart);
+        if (imgEnd != -1) {
+            content = content.substring(0, imgStart) + content.substring(imgEnd + 1);
+        } else {
+            content = content.substring(0, imgStart);
             break;
         }
     }
     
     // Remove SVG elements
     removeNestedTag(content, "<svg", "</svg>");
+    removeNestedTag(content, "<SVG", "</SVG>");
     
     // Remove script and style tags
     removeNestedTag(content, "<script", "</script>");
@@ -689,6 +615,41 @@ void NewsletterCard::removeImageTags(String& content) {
     removeNestedTag(content, "<audio", "</audio>");
     removeNestedTag(content, "<iframe", "</iframe>");
     removeNestedTag(content, "<canvas", "</canvas>");
+    removeNestedTag(content, "<embed", "</embed>");
+    removeNestedTag(content, "<object", "</object>");
+    removeNestedTag(content, "<param", ">");
+    
+    // Remove social media embeds and widgets
+    removeNestedTag(content, "<div class=\"twitter-tweet\"", "</div>");
+    removeNestedTag(content, "<div class=\"instagram-media\"", "</div>");
+    removeNestedTag(content, "<div class=\"fb-post\"", "</div>");
+    removeNestedTag(content, "<div class=\"youtube-embed\"", "</div>");
+    
+    // Remove any remaining divs with image-related classes
+    removeNestedTag(content, "<div class=\"image\"", "</div>");
+    removeNestedTag(content, "<div class=\"img\"", "</div>");
+    removeNestedTag(content, "<div class=\"photo\"", "</div>");
+    removeNestedTag(content, "<div class=\"media\"", "</div>");
+    removeNestedTag(content, "<div class=\"embed\"", "</div>");
+    
+    // Remove data URLs and base64 encoded content that might be images
+    int dataStart = 0;
+    while ((dataStart = content.indexOf("data:image/", dataStart)) != -1) {
+        int dataEnd = content.indexOf("\"", dataStart);
+        if (dataEnd != -1) {
+            // Remove the entire data URL
+            content = content.substring(0, dataStart) + content.substring(dataEnd + 1);
+        } else {
+            // If no closing quote, remove from data start to end
+            content = content.substring(0, dataStart);
+            break;
+        }
+    }
+    
+    // Remove any remaining image-related attributes
+    removeAttribute(content, "src=\"data:image/");
+    removeAttribute(content, "background=\"data:image/");
+    removeAttribute(content, "style=\"background-image:");
     
     Serial.println("NewsletterCard: Image and media removal complete");
 }
@@ -721,6 +682,18 @@ void NewsletterCard::removeNestedTag(String& content, const String& openTag, con
         } else {
             // No closing tag found, remove just the opening tag
             content.remove(tagStart, openEnd - tagStart + 1);
+        }
+    }
+}
+
+void NewsletterCard::removeAttribute(String& content, const String& attribute) {
+    int attrStart = 0;
+    while ((attrStart = content.indexOf(attribute, attrStart)) != -1) {
+        int attrEnd = content.indexOf(" ", attrStart);
+        if (attrEnd != -1) {
+            content.remove(attrStart, attrEnd - attrStart + 1);
+        } else {
+            content.remove(attrStart);
         }
     }
 } 
