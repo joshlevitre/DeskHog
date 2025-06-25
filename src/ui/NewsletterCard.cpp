@@ -12,57 +12,116 @@ NewsletterCard::NewsletterCard(lv_obj_t* parent, ConfigManager& config, EventQue
     // Initialize with hardcoded PostHog Substack feed
     initializeFeed();
     
-    // Create the main card container
+    // Create the main card container with improved styling
     _card = lv_obj_create(parent);
     if (!_card) {
         Serial.println("NewsletterCard: Failed to create card container");
         return;
     }
     
-    // Set card size and style with gradient background
+    // Set card size and enhanced styling
     lv_obj_set_size(_card, width, height);
-    lv_obj_set_style_bg_color(_card, lv_color_make(20, 25, 40), 0);
-    lv_obj_set_style_border_width(_card, 2, 0);
-    lv_obj_set_style_border_color(_card, lv_color_make(60, 80, 120), 0);
-    lv_obj_set_style_border_opa(_card, LV_OPA_50, 0);
-    lv_obj_set_style_radius(_card, 8, 0);
-    lv_obj_set_style_pad_all(_card, 8, 0);
+    lv_obj_set_style_bg_color(_card, Style::backgroundColor(), 0);
+    lv_obj_set_style_border_width(_card, 0, 0);
+    lv_obj_set_style_radius(_card, 0, 0);
+    lv_obj_set_style_pad_all(_card, 0, 0);
     
-    // Create title label with enhanced styling
-    _title_label = lv_label_create(_card);
-    if (_title_label) {
-        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
-        lv_obj_set_style_text_font(_title_label, &font_loud_noises, 0);
-        lv_label_set_text(_title_label, "📧 PostHog News");
-        lv_obj_align(_title_label, LV_ALIGN_TOP_MID, 0, 5);
-        lv_obj_set_style_text_align(_title_label, LV_TEXT_ALIGN_CENTER, 0);
+    // Create idle mode container (default visible)
+    _idle_container = lv_obj_create(_card);
+    if (_idle_container) {
+        lv_obj_set_size(_idle_container, width, height);
+        lv_obj_set_style_bg_color(_idle_container, lv_color_make(15, 20, 35), 0);
+        lv_obj_set_style_border_width(_idle_container, 2, 0);
+        lv_obj_set_style_border_color(_idle_container, lv_color_make(60, 80, 120), 0);
+        lv_obj_set_style_border_opa(_idle_container, LV_OPA_60, 0);
+        lv_obj_set_style_radius(_idle_container, 8, 0);
+        lv_obj_set_style_pad_all(_idle_container, IDLE_PADDING, 0);
+        
+        // Create title label with enhanced styling
+        _title_label = lv_label_create(_idle_container);
+        if (_title_label) {
+            lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
+            lv_obj_set_style_text_font(_title_label, Style::loudNoisesFont(), 0);
+            lv_label_set_text(_title_label, "PostHog News");
+            lv_obj_align(_title_label, LV_ALIGN_TOP_MID, 0, 5);
+            lv_obj_set_style_text_align(_title_label, LV_TEXT_ALIGN_CENTER, 0);
+        }
+        
+        // Create status label with enhanced styling
+        _status_label = lv_label_create(_idle_container);
+        if (_status_label) {
+            lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
+            lv_obj_set_style_text_font(_status_label, Style::labelFont(), 0);
+            lv_label_set_text(_status_label, "Loading...");
+            lv_obj_align(_status_label, LV_ALIGN_TOP_MID, 0, 30);
+            lv_obj_set_style_text_align(_status_label, LV_TEXT_ALIGN_CENTER, 0);
+        }
+        
+        // Create content label with enhanced styling
+        _content_label = lv_label_create(_idle_container);
+        if (_content_label) {
+            lv_obj_set_style_text_color(_content_label, lv_color_make(220, 220, 220), 0);
+            lv_obj_set_style_text_font(_content_label, Style::valueFont(), 0);
+            lv_obj_set_style_text_line_space(_content_label, 10, 0);
+            lv_obj_set_style_text_align(_content_label, LV_TEXT_ALIGN_LEFT, 0);
+            lv_label_set_long_mode(_content_label, LV_LABEL_LONG_WRAP);
+            lv_obj_set_size(_content_label, width - (IDLE_PADDING * 2), height - 40);
+            lv_obj_align(_content_label, LV_ALIGN_TOP_LEFT, 0, 48);
+            
+            // Minimal padding for maximum text display
+            lv_obj_set_style_pad_all(_content_label, 2, 0);
+        }
     }
     
-    // Create status label with enhanced styling
-    _status_label = lv_label_create(_card);
-    if (_status_label) {
-        lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
-        lv_obj_set_style_text_font(_status_label, &font_label, 0);
-        lv_label_set_text(_status_label, "🔄 Loading...");
-        lv_obj_align(_status_label, LV_ALIGN_TOP_MID, 0, 30);
-        lv_obj_set_style_text_align(_status_label, LV_TEXT_ALIGN_CENTER, 0);
-    }
-    
-    // Create content label with enhanced styling
-    _content_label = lv_label_create(_card);
-    if (_content_label) {
-        lv_obj_set_style_text_color(_content_label, lv_color_make(220, 220, 220), 0);
-        lv_obj_set_style_text_font(_content_label, &font_label, 0);
-        lv_obj_set_style_text_line_space(_content_label, 20, 0);
-        lv_obj_set_style_text_align(_content_label, LV_TEXT_ALIGN_LEFT, 0);
-        lv_label_set_long_mode(_content_label, LV_LABEL_LONG_WRAP);
-        lv_obj_set_size(_content_label, width - 20, height - 70);
-        lv_obj_align(_content_label, LV_ALIGN_TOP_LEFT, 5, 55);
-        // Add subtle background for content
-        lv_obj_set_style_bg_color(_content_label, lv_color_make(30, 35, 50), 0);
-        lv_obj_set_style_bg_opa(_content_label, LV_OPA_30, 0);
-        lv_obj_set_style_radius(_content_label, 4, 0);
-        lv_obj_set_style_pad_all(_content_label, 5, 0);
+    // Create reading mode container (initially hidden)
+    _reading_container = lv_obj_create(_card);
+    if (_reading_container) {
+        lv_obj_set_size(_reading_container, width, height);
+        lv_obj_set_style_bg_color(_reading_container, lv_color_make(10, 15, 25), 0);
+        lv_obj_set_style_border_width(_reading_container, 0, 0);
+        lv_obj_set_style_radius(_reading_container, 0, 0);
+        lv_obj_set_style_pad_all(_reading_container, READING_PADDING, 0);
+        
+        // Initially hide reading container
+        lv_obj_add_flag(_reading_container, LV_OBJ_FLAG_HIDDEN);
+        
+        // Create reading mode title (smaller, more subtle)
+        lv_obj_t* reading_title = lv_label_create(_reading_container);
+        if (reading_title) {
+            lv_obj_set_style_text_color(reading_title, lv_color_make(180, 180, 200), 0);
+            lv_obj_set_style_text_font(reading_title, Style::labelFont(), 0);
+            lv_obj_align(reading_title, LV_ALIGN_TOP_LEFT, 0, 0);
+            lv_obj_set_style_text_align(reading_title, LV_TEXT_ALIGN_LEFT, 0);
+            // Will be updated with article title
+        }
+        
+        // Create reading mode content with better typography
+        lv_obj_t* reading_content = lv_label_create(_reading_container);
+        if (reading_content) {
+            lv_obj_set_style_text_color(reading_content, lv_color_make(240, 240, 240), 0);
+            lv_obj_set_style_text_font(reading_content, Style::valueFont(), 0);
+            lv_obj_set_style_text_line_space(reading_content, 12, 0);
+            lv_obj_set_style_text_align(reading_content, LV_TEXT_ALIGN_LEFT, 0);
+            lv_label_set_long_mode(reading_content, LV_LABEL_LONG_WRAP);
+            lv_obj_set_size(reading_content, width - (READING_PADDING * 2), height - 40);
+            lv_obj_align(reading_content, LV_ALIGN_TOP_LEFT, 0, 18);
+            
+            // Store reference to reading content label
+            _content_label = reading_content;
+        }
+        
+        // Progress indicator removed for cleaner UI
+        
+        // Create page indicator
+        _page_indicator = lv_label_create(_reading_container);
+        if (_page_indicator) {
+            lv_obj_set_style_text_color(_page_indicator, lv_color_make(150, 150, 170), 0);
+            lv_obj_set_style_text_font(_page_indicator, Style::labelFont(), 0);
+            lv_obj_align(_page_indicator, LV_ALIGN_BOTTOM_LEFT, 0, -5);
+            lv_obj_set_style_text_align(_page_indicator, LV_TEXT_ALIGN_LEFT, 0);
+        }
+        
+        // Navigation hint removed for cleaner UI
     }
     
     Serial.println("NewsletterCard: Initial display update");
@@ -90,14 +149,7 @@ bool NewsletterCard::handleButtonPress(uint8_t button_index) {
         return false;
     }
     
-    Serial.println("NewsletterCard: Center button detected, adding visual feedback...");
-    
-    // Add immediate visual feedback
-    lv_label_set_text(_status_label, "Loading...");
-    lv_obj_set_style_text_color(_status_label, lv_color_make(0, 100, 200), 0);
-    
-    // Small delay to make the loading feedback visible
-    delay(100);
+    Serial.println("NewsletterCard: Center button detected");
     
     switch (_currentState) {
         case DisplayState::IDLE:
@@ -179,12 +231,12 @@ void NewsletterCard::refreshFeed() {
     Serial.println("NewsletterCard: Starting feed refresh...");
     
     // Show loading state immediately
-    lv_label_set_text(_status_label, "🔄 Fetching newsletter...");
+    lv_label_set_text(_status_label, "Fetching...");
     lv_obj_set_style_text_color(_status_label, lv_color_make(120, 200, 255), 0);
     
     if (!_rssClient.isReady()) {
         Serial.println("NewsletterCard: RSS client not ready - WiFi not connected");
-        lv_label_set_text(_status_label, "🚫 No WiFi connection");
+        lv_label_set_text(_status_label, "No WiFi");
         lv_obj_set_style_text_color(_status_label, lv_color_make(255, 100, 100), 0);
         
         // Try to reconnect in 3 seconds
@@ -218,7 +270,7 @@ void NewsletterCard::refreshFeed() {
         }
     } else {
         Serial.println("NewsletterCard: Feed fetch failed");
-        lv_label_set_text(_status_label, "⚠️ Feed fetch failed");
+        lv_label_set_text(_status_label, "Fetch failed");
         lv_obj_set_style_text_color(_status_label, lv_color_make(255, 150, 0), 0);
         _currentState = DisplayState::IDLE;
         
@@ -236,13 +288,18 @@ void NewsletterCard::onEvent(const Event& event) {
 
 void NewsletterCard::showIdleState() {
     Serial.println("NewsletterCard: Showing idle state...");
+    
+    // Switch to idle mode container
+    lv_obj_clear_flag(_idle_container, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(_reading_container, LV_OBJ_FLAG_HIDDEN);
+    
     const RssItem* latest = _rssClient.getLatestItem();
     if (latest) {
         Serial.printf("NewsletterCard: Displaying latest newsletter: %s\n", latest->title.c_str());
         // Show the latest newsletter with attractive styling
-        lv_label_set_text(_title_label, "📧 Latest from PostHog");
+        lv_label_set_text(_title_label, "Latest from PostHog");
         lv_label_set_text(_content_label, latest->title.c_str());
-        lv_label_set_text(_status_label, "👆 Press CENTER to read");
+        lv_label_set_text(_status_label, "Press CENTER to read");
         
         // Update colors for available content
         lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
@@ -251,9 +308,9 @@ void NewsletterCard::showIdleState() {
     } else {
         Serial.println("NewsletterCard: No newsletter available to display");
         // No newsletter available - encourage refresh
-        lv_label_set_text(_title_label, "📧 PostHog News");
-        lv_label_set_text(_content_label, "🔄 Fetching latest newsletter...\n\nMake sure WiFi is connected!");
-        lv_label_set_text(_status_label, "👆 Press CENTER to refresh");
+        lv_label_set_text(_title_label, "PostHog News");
+        lv_label_set_text(_content_label, "Fetching latest newsletter...\n\nCheck WiFi connection");
+        lv_label_set_text(_status_label, "Press CENTER to refresh");
         
         // Update colors for no content state
         lv_obj_set_style_text_color(_title_label, lv_color_make(255, 200, 100), 0);
@@ -263,11 +320,15 @@ void NewsletterCard::showIdleState() {
 }
 
 void NewsletterCard::showNewNotificationState() {
+    // Switch to idle mode container (notification is shown in idle mode)
+    lv_obj_clear_flag(_idle_container, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(_reading_container, LV_OBJ_FLAG_HIDDEN);
+    
     const RssItem* latest = _rssClient.getLatestItem();
     if (latest) {
-        lv_label_set_text(_title_label, "🆕 NEW from PostHog!");
+        lv_label_set_text(_title_label, "NEW from PostHog!");
         lv_label_set_text(_content_label, latest->title.c_str());
-        lv_label_set_text(_status_label, "✨ Press CENTER to read ✨");
+        lv_label_set_text(_status_label, "Press CENTER to read");
         
         // Update colors to indicate new content with excitement
         lv_obj_set_style_text_color(_title_label, lv_color_make(255, 100, 100), 0);
@@ -278,15 +339,19 @@ void NewsletterCard::showNewNotificationState() {
 
 void NewsletterCard::showReadingState() {
     if (_currentArticle) {
-        // Truncate long titles for better display
-        String displayTitle = _currentArticle->title;
-        if (displayTitle.length() > 25) {
-            displayTitle = displayTitle.substring(0, 22) + "...";
-        }
-        lv_label_set_text(_title_label, displayTitle.c_str());
+        // Switch to reading mode container
+        lv_obj_add_flag(_idle_container, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(_reading_container, LV_OBJ_FLAG_HIDDEN);
         
-        // Set reading mode colors
-        lv_obj_set_style_text_color(_title_label, lv_color_make(255, 255, 100), 0);
+        // Update reading mode title
+        lv_obj_t* reading_title = lv_obj_get_child(_reading_container, 0);
+        if (reading_title) {
+            String displayTitle = _currentArticle->title;
+            if (displayTitle.length() > 30) {
+                displayTitle = displayTitle.substring(0, 27) + "...";
+            }
+            lv_label_set_text(reading_title, displayTitle.c_str());
+        }
         
         // Force state change to READING
         _currentState = DisplayState::READING;
@@ -329,74 +394,46 @@ void NewsletterCard::paginateContent(const String& content) {
     
     Serial.printf("NewsletterCard: Found %d paragraphs\n", paragraphs.size());
     
-    // Build pages with better formatting
+    // Build pages with proper word wrapping - let LVGL handle line breaks
     String currentPage = "";
     int currentLineCount = 0;
     
     for (const String& paragraph : paragraphs) {
-        // Process each paragraph word by word
-        std::vector<String> words;
-        int wordStart = 0;
-        int wordEnd = paragraph.indexOf(' ');
+        // Add paragraph to current page
+        String paragraphToAdd = paragraph;
         
-        while (wordEnd != -1) {
-            words.push_back(paragraph.substring(wordStart, wordEnd));
-            wordStart = wordEnd + 1;
-            wordEnd = paragraph.indexOf(' ', wordStart);
-        }
-        if (wordStart < paragraph.length()) {
-            words.push_back(paragraph.substring(wordStart));
-        }
-        
-        // Build lines for this paragraph
-        String currentLine = "";
-        for (const String& word : words) {
-            // Check if adding this word would exceed line length
-            if (currentLine.length() + word.length() + 1 > MAX_CHARS_PER_LINE) {
-                // Add current line to page
-                if (currentPage.length() > 0) {
-                    currentPage += "\n";
-                }
-                currentPage += currentLine;
-                currentLineCount++;
-                
-                // Check if we need a new page
-                if (currentLineCount >= MAX_LINES_PER_PAGE) {
-                    _articlePages.push_back(currentPage);
-                    currentPage = "";
-                    currentLineCount = 0;
-                }
-                
-                currentLine = word; // Start new line with this word
-            } else {
-                // Add word to current line
-                if (currentLine.length() > 0) {
-                    currentLine += " ";
-                }
-                currentLine += word;
-            }
-        }
-        
-        // Add the last line of the paragraph
-        if (currentLine.length() > 0) {
-            if (currentPage.length() > 0) {
-                currentPage += "\n";
-            }
-            currentPage += currentLine;
+        // If this is not the first content on the page, add a line break
+        if (currentPage.length() > 0) {
+            paragraphToAdd = "\n" + paragraphToAdd;
             currentLineCount++;
         }
         
-        // Add paragraph break (but don't exceed page limit)
-        if (currentLineCount < MAX_LINES_PER_PAGE - 1) {
-            currentPage += "\n";
-            currentLineCount++;
+        // Estimate how many lines this paragraph will take
+        // Use a rough estimate: divide character count by average characters per line
+        int avgCharsPerLine = 35; // Conservative estimate allowing for word wrapping
+        int estimatedLines = (paragraphToAdd.length() + avgCharsPerLine - 1) / avgCharsPerLine;
+        
+        // If adding this paragraph would exceed the page limit, start a new page
+        if (currentLineCount + estimatedLines > MAX_LINES_PER_PAGE && currentPage.length() > 0) {
+            _articlePages.push_back(currentPage);
+            currentPage = paragraph; // Start new page with this paragraph
+            currentLineCount = estimatedLines;
+        } else {
+            currentPage += paragraphToAdd;
+            currentLineCount += estimatedLines;
         }
         
-        // Check if we need a new page after this paragraph
+        // If we've filled the page, start a new one
         if (currentLineCount >= MAX_LINES_PER_PAGE) {
             _articlePages.push_back(currentPage);
             currentPage = "";
             currentLineCount = 0;
+        } else {
+            // Add spacing between paragraphs if there's room
+            if (currentLineCount < MAX_LINES_PER_PAGE - 1) {
+                currentPage += "\n";
+                currentLineCount++;
+            }
         }
     }
     
@@ -426,18 +463,15 @@ void NewsletterCard::updateReadingDisplay() {
         // Set the content for current page
         lv_label_set_text(_content_label, _articlePages[_currentPage].c_str());
         
-        // Create attractive page indicator with clear navigation
-        String status = "📖 Page " + String(_currentPage + 1) + "/" + String(_articlePages.size());
-        if (_currentPage < _articlePages.size() - 1) {
-            status += "\n👆 CENTER = Next page";
-        } else {
-            status += "\n👆 CENTER = Exit reading";
+        // Update page indicator
+        if (_page_indicator) {
+            String pageText = "Page " + String(_currentPage + 1) + "/" + String(_articlePages.size());
+            lv_label_set_text(_page_indicator, pageText.c_str());
         }
-        lv_label_set_text(_status_label, status.c_str());
         
-        // Update colors for reading mode
-        lv_obj_set_style_text_color(_content_label, lv_color_make(240, 240, 240), 0);
-        lv_obj_set_style_text_color(_status_label, lv_color_make(100, 200, 255), 0);
+        // Progress indicator removed
+        
+        // Navigation hint removed
         
         // Debug output
         Serial.printf("NewsletterCard: Displaying page content length: %d\n", _articlePages[_currentPage].length());
@@ -448,7 +482,9 @@ void NewsletterCard::updateReadingDisplay() {
     } else {
         Serial.println("NewsletterCard: ERROR - Current page index out of bounds!");
         lv_label_set_text(_content_label, "Page error");
-        lv_label_set_text(_status_label, "Error: Invalid page");
+        if (_page_indicator) {
+            lv_label_set_text(_page_indicator, "Error: Invalid page");
+        }
     }
 }
 
@@ -457,10 +493,22 @@ bool NewsletterCard::shouldRefresh() const {
 }
 
 void NewsletterCard::initializeFeed() {
-    // Always use PostHog Substack feed - no configuration needed
-    Serial.println("NewsletterCard: Initializing with PostHog Substack feed");
-    _rssClient.setFeedUrl("https://posthog.substack.com/feed");
+    // Get RSS URL from config, use PostHog Substack as default
+    String rssUrl = _config.getConfigValue("newsletter_rss_url");
+    if (rssUrl.length() == 0) {
+        rssUrl = "https://posthog.substack.com/feed";
+    }
+    Serial.printf("NewsletterCard: Initializing with RSS feed: %s\n", rssUrl.c_str());
+    _rssClient.setFeedUrl(rssUrl);
     Serial.printf("NewsletterCard: Feed URL set to: %s\n", _rssClient.getFeedUrl().c_str());
+}
+
+String NewsletterCard::getFeedUrl() const {
+    String rssUrl = _config.getConfigValue("newsletter_rss_url");
+    if (rssUrl.length() == 0) {
+        rssUrl = "https://posthog.substack.com/feed";
+    }
+    return rssUrl;
 }
 
 void NewsletterCard::handlePeriodicUpdate() {

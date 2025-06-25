@@ -59,10 +59,10 @@ public:
     void updateDisplay();
     
     /**
-     * @brief Get the current feed URL (always PostHog Substack)
-     * @return The PostHog Substack RSS feed URL
+     * @brief Get the current feed URL
+     * @return The configured RSS feed URL or PostHog default
      */
-    String getFeedUrl() const { return "https://posthog.substack.com/feed"; }
+    String getFeedUrl() const;
     
     /**
      * @brief Force a feed refresh
@@ -98,11 +98,16 @@ private:
     lv_obj_t* _title_label;              ///< Title text label
     lv_obj_t* _content_label;            ///< Content text label
     lv_obj_t* _status_label;             ///< Status/info label
+    lv_obj_t* _reading_container;        ///< Container for reading mode layout
+    lv_obj_t* _idle_container;           ///< Container for idle mode layout
+    lv_obj_t* _progress_bar;             ///< Progress indicator label for reading mode
+    lv_obj_t* _page_indicator;           ///< Page indicator label
     
     // Constants
-    static constexpr int MAX_LINES_PER_PAGE = 5;  ///< Maximum lines per page
-    static constexpr int MAX_CHARS_PER_LINE = 30; ///< Maximum characters per line
+    static constexpr int MAX_LINES_PER_PAGE = 5;   ///< Exactly 5 lines per page for optimal reading
     static constexpr int REFRESH_INTERVAL = 300000; ///< Refresh interval (5 minutes)
+    static constexpr int READING_PADDING = 4;      ///< Minimal padding for reading mode
+    static constexpr int IDLE_PADDING = 4;         ///< Minimal padding for idle mode
     unsigned long _lastRefreshTime;      ///< Last refresh timestamp
     
     /**
@@ -144,7 +149,7 @@ private:
     bool shouldRefresh() const;
     
     /**
-     * @brief Initialize the RSS client with PostHog Substack feed
+     * @brief Initialize the RSS client with configured or default feed
      */
     void initializeFeed();
     

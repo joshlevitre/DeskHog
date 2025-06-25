@@ -264,13 +264,23 @@ void CardController::initializeCardTypes() {
     // Register NEWSLETTER card type
     CardDefinition newsletterDef;
     newsletterDef.type = CardType::NEWSLETTER;
-    newsletterDef.name = "PostHog Newsletter";
+    newsletterDef.name = "RSS Newsletter";
     newsletterDef.allowMultiple = false;
-    newsletterDef.needsConfigInput = false;
-    newsletterDef.configInputLabel = "";
-    newsletterDef.uiDescription = "Read the latest PostHog newsletter from Substack";
+    newsletterDef.needsConfigInput = true;
+    newsletterDef.configInputLabel = "RSS Feed URL (optional)";
+    newsletterDef.uiDescription = "Read RSS newsletters (defaults to PostHog Substack if no URL provided)";
     newsletterDef.factory = [this](const String& configValue) -> lv_obj_t* {
-        // Create new newsletter card (configValue ignored - always uses PostHog feed)
+        // Save RSS URL to config if provided, otherwise use default PostHog feed
+        if (configValue.length() > 0) {
+            configManager.setConfigValue("newsletter_rss_url", configValue);
+            Serial.printf("Newsletter: Set custom RSS URL: %s\n", configValue.c_str());
+        } else {
+            // Remove custom URL to use default
+            configManager.removeConfigValue("newsletter_rss_url");
+            Serial.println("Newsletter: Using default PostHog RSS feed");
+        }
+        
+        // Create new newsletter card
         NewsletterCard* newCard = new NewsletterCard(
             screen,
             configManager,
