@@ -9,7 +9,8 @@
  */
 enum class CardType {
     INSIGHT,    ///< PostHog insight visualization card
-    FRIEND      ///< Walking animation/encouragement card
+    FRIEND,     ///< Walking animation/encouragement card
+    NEWSLETTER  ///< RSS newsletter reader card
     // New card types can be added here
 };
 
@@ -77,6 +78,7 @@ inline String cardTypeToString(CardType type) {
     switch (type) {
         case CardType::INSIGHT: return "INSIGHT";
         case CardType::FRIEND: return "FRIEND";
+        case CardType::NEWSLETTER: return "NEWSLETTER";
         default: return "UNKNOWN";
     }
 }
@@ -89,5 +91,6 @@ inline String cardTypeToString(CardType type) {
 inline CardType stringToCardType(const String& str) {
     if (str == "INSIGHT") return CardType::INSIGHT;
     if (str == "FRIEND") return CardType::FRIEND;
+    if (str == "NEWSLETTER") return CardType::NEWSLETTER;
     return CardType::INSIGHT; // Default fallback
 }

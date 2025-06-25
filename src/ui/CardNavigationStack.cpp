@@ -183,13 +183,23 @@ void CardNavigationStack::handleButtonPress(uint8_t button_index) {
     
     // Handle center button (Button 1) - delegate to active card if it has an input handler
     if (button_index == Input::BUTTON_CENTER) {
+        Serial.printf("CardNavigationStack: Center button pressed, current card: %d\n", _current_card);
+        Serial.printf("CardNavigationStack: Total input handlers: %d\n", _input_handlers.size());
+        
         // Find the input handler for the current card
         bool handled = false;
+        lv_obj_t* current_card_obj = lv_obj_get_child(_main_container, _current_card);
+        Serial.printf("CardNavigationStack: Current card object: %p\n", current_card_obj);
+        
         for (const auto& handler_pair : _input_handlers) {
-            if (handler_pair.first == lv_obj_get_child(_main_container, _current_card)) {
+            Serial.printf("CardNavigationStack: Checking handler for card %p, handler %p\n", 
+                         handler_pair.first, handler_pair.second);
+            if (handler_pair.first == current_card_obj) {
+                Serial.println("CardNavigationStack: Found input handler for current card!");
                 // Found a handler for the current card
                 if (handler_pair.second) {
                     handled = handler_pair.second->handleButtonPress(button_index);
+                    Serial.printf("CardNavigationStack: Handler returned: %s\n", handled ? "true" : "false");
                     if (handled) {
                         // Handler processed the button press, don't do default behavior
                         if (_mutex_ptr) {
@@ -201,6 +211,7 @@ void CardNavigationStack::handleButtonPress(uint8_t button_index) {
                 break;
             }
         }
+        Serial.println("CardNavigationStack: No input handler found for current card");
         // If not handled by card, fall through to default behavior (if any)
     }
     

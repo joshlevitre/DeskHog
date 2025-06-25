@@ -13,19 +13,29 @@ public:
     static const uint8_t BUTTON_UP = 2;      //pulled LOW by default, HIGH when pressed
 
     static void configureButtons() {
+        Serial.println("Input: Configuring buttons...");
+        Serial.printf("Input: BUTTON_DOWN pin: %d\n", BUTTON_DOWN);
+        Serial.printf("Input: BUTTON_CENTER pin: %d\n", BUTTON_CENTER);
+        Serial.printf("Input: BUTTON_UP pin: %d\n", BUTTON_UP);
+        
         // BOOT button has built-in pullup, active LOW
         buttons[BUTTON_DOWN].attach(BUTTON_DOWN, INPUT_PULLUP);
         buttons[BUTTON_DOWN].interval(5);
         buttons[BUTTON_DOWN].setPressedState(LOW);
+        Serial.println("Input: Configured BUTTON_DOWN with INPUT_PULLUP, active LOW");
         
         // Configure CENTER and UP buttons with pulldown, active HIGH
         buttons[BUTTON_CENTER].attach(BUTTON_CENTER, INPUT_PULLDOWN);
         buttons[BUTTON_CENTER].interval(5);
         buttons[BUTTON_CENTER].setPressedState(HIGH);
+        Serial.println("Input: Configured BUTTON_CENTER with INPUT_PULLDOWN, active HIGH");
         
         buttons[BUTTON_UP].attach(BUTTON_UP, INPUT_PULLDOWN);
         buttons[BUTTON_UP].interval(5);
         buttons[BUTTON_UP].setPressedState(HIGH);
+        Serial.println("Input: Configured BUTTON_UP with INPUT_PULLDOWN, active HIGH");
+        
+        Serial.println("Input: Button configuration complete");
     }
 
     static void update() {

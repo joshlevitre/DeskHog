@@ -140,6 +140,27 @@ public:
      */
     bool saveCardConfigs(const std::vector<CardConfig>& configs);
 
+    /**
+     * @brief Store a generic configuration value
+     * @param key The configuration key
+     * @param value The configuration value
+     * @return true if saved successfully, false otherwise
+     */
+    bool setConfigValue(const String& key, const String& value);
+
+    /**
+     * @brief Retrieve a generic configuration value
+     * @param key The configuration key
+     * @return The configuration value or empty string if not found
+     */
+    String getConfigValue(const String& key) const;
+
+    /**
+     * @brief Remove a generic configuration value
+     * @param key The configuration key to remove
+     */
+    void removeConfigValue(const String& key);
+
 private:
     
     /**
@@ -162,7 +183,7 @@ private:
     void commit();
 
     // Preferences instances for persistent storage
-    Preferences _preferences;      ///< Main preferences storage instance
+    mutable Preferences _preferences;      ///< Main preferences storage instance
     Preferences _insightsPrefs;   ///< Separate storage for insight data
     Preferences _cardPrefs;       ///< Separate storage for card configurations
 

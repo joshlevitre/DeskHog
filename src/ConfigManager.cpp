@@ -261,3 +261,37 @@ bool ConfigManager::saveCardConfigs(const std::vector<CardConfig>& configs) {
     
     return true;
 }
+
+bool ConfigManager::setConfigValue(const String& key, const String& value) {
+    if (key.length() == 0 || key.length() > 64) {
+        return false;
+    }
+    
+    if (value.length() > 1024) {
+        return false;
+    }
+    
+    _preferences.putString(key.c_str(), value);
+    
+    // Commit changes
+    commit();
+    
+    return true;
+}
+
+String ConfigManager::getConfigValue(const String& key) const {
+    if (key.length() == 0) {
+        return "";
+    }
+    
+    return _preferences.getString(key.c_str(), "");
+}
+
+void ConfigManager::removeConfigValue(const String& key) {
+    if (key.length() > 0) {
+        _preferences.remove(key.c_str());
+        
+        // Commit changes
+        commit();
+    }
+}

@@ -1,5 +1,6 @@
 #include "ui/CardController.h"
 #include <algorithm>
+#include "posthog/RssClient.h"
 
 QueueHandle_t CardController::uiQueue = nullptr;
 
@@ -24,8 +25,12 @@ CardController::CardController(
     cardStack(nullptr),
     provisioningCard(nullptr),
     animationCard(nullptr),
+    newsletterCard(nullptr),
+    rssClient(nullptr),
     displayInterface(nullptr)
 {
+    // Initialize RSS client
+    rssClient = new RssClient(eventQueue);
 }
 
 CardController::~CardController() {
@@ -38,6 +43,12 @@ CardController::~CardController() {
     
     delete animationCard;
     animationCard = nullptr;
+    
+    delete newsletterCard;
+    newsletterCard = nullptr;
+    
+    delete rssClient;
+    rssClient = nullptr;
     
     // Use mutex if available before cleaning up insight cards
     if (displayInterface && displayInterface->getMutexPtr()) {
@@ -249,6 +260,45 @@ void CardController::initializeCardTypes() {
         return nullptr;
     };
     registerCardType(friendDef);
+    
+    // Register NEWSLETTER card type
+    CardDefinition newsletterDef;
+    newsletterDef.type = CardType::NEWSLETTER;
+    newsletterDef.name = "Newsletter reader";
+    newsletterDef.allowMultiple = false;
+    newsletterDef.needsConfigInput = true;
+    newsletterDef.configInputLabel = "RSS Feed URL";
+    newsletterDef.uiDescription = "Read RSS newsletters like Substack";
+    newsletterDef.factory = [this](const String& configValue) -> lv_obj_t* {
+        // Create new newsletter card
+        NewsletterCard* newCard = new NewsletterCard(
+            screen,
+            configManager,
+            eventQueue,
+            *rssClient,
+            screenWidth,
+            screenHeight
+        );
+        
+        if (newCard && newCard->getCard()) {
+            // Set the feed URL if provided
+            if (configValue.length() > 0) {
+                newCard->setFeedUrl(configValue);
+            }
+            
+            // Store the newsletter card pointer for management
+            newsletterCard = newCard;
+            
+            // Register as input handler
+            cardStack->registerInputHandler(newCard->getCard(), newCard);
+            
+            return newCard->getCard();
+        }
+        
+        delete newCard;
+        return nullptr;
+    };
+    registerCardType(newsletterDef);
 }
 
 void CardController::handleCardConfigChanged() {
@@ -267,7 +317,7 @@ void CardController::reconcileCards(const std::vector<CardConfig>& newConfigs) {
     }
     
     // Track the number of cards before reconciliation
-    size_t oldCardCount = insightCards.size() + (animationCard ? 1 : 0);
+    size_t oldCardCount = insightCards.size() + (animationCard ? 1 : 0) + (newsletterCard ? 1 : 0);
     
     reconcileInProgress = true;
     
@@ -299,6 +349,13 @@ void CardController::reconcileCards(const std::vector<CardConfig>& newConfigs) {
             cardStack->removeCard(animationCard->getCard());
             delete animationCard;
             animationCard = nullptr;
+        }
+        
+        // Remove newsletter card
+        if (newsletterCard && newsletterCard->getCard()) {
+            cardStack->removeCard(newsletterCard->getCard());
+            delete newsletterCard;
+            newsletterCard = nullptr;
         }
         
         // Force LVGL to process all pending operations
@@ -442,5 +499,12 @@ void CardController::handleCardTitleUpdated(const Event& event) {
             }
             break;
         }
+    }
+}
+
+void CardController::triggerRssRefresh() {
+    // Trigger RSS refresh for newsletter cards
+    if (newsletterCard) {
+        newsletterCard->handlePeriodicUpdate();
     }
 } 

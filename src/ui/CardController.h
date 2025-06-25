@@ -11,10 +11,12 @@
 #include "ui/ProvisioningCard.h"
 #include "ui/InsightCard.h"
 #include "ui/FriendCard.h"
+#include "ui/NewsletterCard.h"
 #include "hardware/DisplayInterface.h"
 #include "EventQueue.h"
 #include "config/CardConfig.h"
 #include "UICallback.h"
+#include "posthog/RssClient.h"
 
 /**
  * @class CardController
@@ -140,6 +142,13 @@ public:
      */
     void dispatchToLVGLTask(std::function<void()> update_func, bool to_front = false);
 
+    /**
+     * @brief Trigger RSS feed refresh
+     * 
+     * Called periodically to refresh RSS feeds for newsletter cards.
+     */
+    void triggerRssRefresh();
+
 private:
     // Screen reference
     lv_obj_t* screen;              ///< Main LVGL screen object
@@ -157,6 +166,8 @@ private:
     ProvisioningCard* provisioningCard; ///< Card for device provisioning
     FriendCard* animationCard;       ///< Card for animations
     std::vector<InsightCard*> insightCards; ///< Collection of insight cards
+    NewsletterCard* newsletterCard;   ///< Newsletter reading card
+    RssClient* rssClient;             ///< RSS client for newsletter feeds
     
     // Display interface for thread safety
     DisplayInterface* displayInterface;  ///< Thread-safe display interface

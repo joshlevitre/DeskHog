@@ -70,6 +70,7 @@ TaskHandle_t wifiTask;
 TaskHandle_t portalTask;
 TaskHandle_t insightTask;
 TaskHandle_t neoPixelTask;
+TaskHandle_t rssTask;
 
 // WiFi connection timeout in milliseconds
 #define WIFI_TIMEOUT 30000
@@ -111,6 +112,8 @@ void lvglHandlerTask(void* parameter) {
     // static bool upPressedState = false; // Unused
     // static bool downPressedState = false; // Unused
 
+    Serial.println("lvglHandlerTask: Starting button polling task");
+
     while (1) {
         // Handle LVGL tasks
         displayInterface->handleLVGLTasks();
@@ -133,9 +136,20 @@ void lvglHandlerTask(void* parameter) {
             bool centerButtonHeld = (buttons[Input::BUTTON_CENTER].read() == HIGH);
             bool downButtonHeld = (buttons[Input::BUTTON_DOWN].read() == LOW);
 
+            // Debug: Print button states every 2 seconds
+            static unsigned long lastDebugTime = 0;
+            if (millis() - lastDebugTime > 2000) {
+                lastDebugTime = millis();
+                Serial.printf("Button states - DOWN: %s, CENTER: %s, UP: %s\n", 
+                    downButtonHeld ? "PRESSED" : "released",
+                    centerButtonHeld ? "PRESSED" : "released",
+                    (buttons[Input::BUTTON_UP].read() == HIGH) ? "PRESSED" : "released");
+            }
+
             if (centerButtonHeld && downButtonHeld) {
                 if (powerOffPressStartTime == 0) { // Both pressed, start timer
                     powerOffPressStartTime = millis();
+                    Serial.println("Power-off sequence started");
                 } else {
                     if (millis() - powerOffPressStartTime >= 2000) { // Held for 2 seconds
                         Serial.println("Simultaneous CENTER and DOWN hold for 2s detected. Entering deep sleep.");
@@ -146,21 +160,27 @@ void lvglHandlerTask(void* parameter) {
                 }
             } else {
                 // If either button is released or not simultaneously pressed, reset the timer
-                powerOffPressStartTime = 0;
+                if (powerOffPressStartTime > 0) {
+                    powerOffPressStartTime = 0;
+                    Serial.println("Power-off sequence cancelled");
+                }
 
                 // Process individual button presses if power-off sequence is not active or completed.
                 // Check .pressed() for single press actions (triggers on state change).
                 // This ensures that navigation still works if the power-off combo isn't fully executed.
                 if (buttons[Input::BUTTON_UP].pressed()) {
+                    Serial.println("Button UP pressed!");
                     // Ensure this doesn't trigger if it was part of the combo that just got released
                     // However, .pressed() fires on the transition, so if it was held and released, 
                     // it won't fire again here unless pressed again separately.
                     cardController->getCardStack()->handleButtonPress(Input::BUTTON_UP);
                 }
                 if (buttons[Input::BUTTON_DOWN].pressed()) {
+                    Serial.println("Button DOWN pressed!");
                     cardController->getCardStack()->handleButtonPress(Input::BUTTON_DOWN);
                 }
                 if (buttons[Input::BUTTON_CENTER].pressed()) {
+                    Serial.println("Button CENTER pressed!");
                     cardController->getCardStack()->handleButtonPress(Input::BUTTON_CENTER);
                 }
             }
@@ -178,10 +198,27 @@ void neoPixelTaskFunction(void* parameter) {
     }
 }
 
+// RSS feed refresh task
+void rssTaskFunction(void* parameter) {
+    while (1) {
+        // Refresh RSS feeds every 10 minutes (600,000 ms)
+        vTaskDelay(pdMS_TO_TICKS(600000));
+        
+        // Check if WiFi is connected before attempting to fetch
+        if (WiFi.status() == WL_CONNECTED && cardController) {
+            // Trigger RSS refresh through the card controller
+            cardController->triggerRssRefresh();
+            Serial.println("RSS task: Triggered feed refresh");
+        }
+    }
+}
+
 void setup() {
     Serial.begin(115200); // Keep Serial.begin() as it initializes the port
     delay(100);  // Give serial port time to initialize
     Serial.println("Starting up...");
+    Serial.println("DeskHog firmware starting...");
+    Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
 
     if (psramInit()) {
         Serial.println("PSRAM initialized successfully");
@@ -218,26 +255,31 @@ void setup() {
 
     // UI queue will be initialized by CardController
 
-
     SystemController::begin();
+    Serial.println("SystemController initialized");
     
     // Initialize styles and fonts
     Style::init();
+    Serial.println("Style initialized");
     
     // Initialize event queue first
     eventQueue = new EventQueue(20); // Create queue with capacity for 20 events
     eventQueue->begin(); // Start event processing
+    Serial.println("EventQueue initialized");
     
     // Initialize NeoPixel controller
     neoPixelController = new NeoPixelController();
     neoPixelController->begin();
+    Serial.println("NeoPixelController initialized");
     
     // Initialize config manager with event queue
     configManager = new ConfigManager(*eventQueue);
     configManager->begin();
+    Serial.println("ConfigManager initialized");
     
     // Initialize PostHog client with event queue
     posthogClient = new PostHogClient(*configManager, *eventQueue);
+    Serial.println("PostHogClient initialized");
     
     // Initialize display manager
     displayInterface = new DisplayInterface(
@@ -245,13 +287,17 @@ void setup() {
         TFT_CS, TFT_DC, TFT_RST, TFT_BACKLITE
     );
     displayInterface->begin();
+    Serial.println("DisplayInterface initialized");
     
     // Initialize WiFi manager with event queue
     wifiInterface = new WiFiInterface(*configManager, *eventQueue);
     wifiInterface->begin();
+    Serial.println("WiFiInterface initialized");
     
     // Initialize buttons
+    Serial.println("About to configure buttons...");
     Input::configureButtons();
+    Serial.println("Buttons configured");
     
     // Create and initialize card controller
     cardController = new CardController(
@@ -263,16 +309,20 @@ void setup() {
         *posthogClient,
         *eventQueue
     );
+    Serial.println("CardController created");
     
     // Initialize with display interface directly
     cardController->initialize(displayInterface);
+    Serial.println("CardController initialized");
     
     // Initialize OtaManager
     otaManager = new OtaManager(CURRENT_FIRMWARE_VERSION, "PostHog", "DeskHog");
+    Serial.println("OtaManager initialized");
     
     // Initialize captive portal
     captivePortal = new CaptivePortal(*configManager, *wifiInterface, *eventQueue, *otaManager, *cardController);
     captivePortal->begin();
+    Serial.println("CaptivePortal initialized");
     
     // Create task for WiFi operations
     xTaskCreatePinnedToCore(
@@ -284,6 +334,7 @@ void setup() {
         &wifiTask,
         0
     );
+    Serial.println("WiFi task created");
     
     // Create task for captive portal
     xTaskCreatePinnedToCore(
@@ -295,6 +346,7 @@ void setup() {
         &portalTask,
         1
     );
+    Serial.println("Portal task created");
     
     // Create task for insight processing
     xTaskCreatePinnedToCore(
@@ -306,6 +358,7 @@ void setup() {
         &insightTask,
         0
     );
+    Serial.println("Insight task created");
     
     // Create LVGL tick task
     xTaskCreatePinnedToCore(
@@ -317,6 +370,7 @@ void setup() {
         NULL,
         1
     );
+    Serial.println("LVGL tick task created");
     
     // Create LVGL handler task (now includes button polling)
     xTaskCreatePinnedToCore(
@@ -328,6 +382,7 @@ void setup() {
         NULL,
         1
     );
+    Serial.println("LVGL handler task created");
     
     // Create NeoPixel task
     xTaskCreatePinnedToCore(
@@ -339,11 +394,26 @@ void setup() {
         &neoPixelTask,
         0
     );
+    Serial.println("NeoPixel task created");
+    
+    // Create RSS task
+    xTaskCreatePinnedToCore(
+        rssTaskFunction,
+        "rssTask",
+        2048,
+        NULL,
+        1,
+        &rssTask,
+        0
+    );
+    Serial.println("RSS task created");
     
     // Check if we have WiFi credentials and publish the appropriate event
     configManager->checkWiFiCredentialsAndPublish();
+    Serial.println("WiFi credentials checked");
 
     SystemController::setSystemState(SystemState::SYS_READY);
+    Serial.println("System ready! Setup complete.");
 }
 
 void loop() {
