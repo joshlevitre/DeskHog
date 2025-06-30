@@ -38,3 +38,17 @@ CONFIG_SPIRAM_CACHE_WORKAROUND=y
 
 # You can also try adjusting other settings like buffer sizes if needed,
 # but the above are the most impactful for SSL memory usage.
+
+# ======================== Additional Size Optimizations ========================
+# Disable Bluetooth completely
+CONFIG_BT_ENABLED=n
+
+# Disable unused network protocols
+CONFIG_LWIP_IPV6=n
+CONFIG_ESP_HTTPS_OTA=n
+
+# Optimize WiFi buffers for smaller memory footprint
+CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP32_WIFI_TX_BUFFER_TYPE=0
+CONFIG_ESP32_WIFI_STATIC_TX_BUFFER_NUM=8
