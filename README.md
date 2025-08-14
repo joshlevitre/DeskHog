@@ -120,6 +120,9 @@ The following PRs would be interesting, and may earn you a free DeskHog kit or o
 
 This firmware has a simple goal: make it easy to set up a stack of screens that you can page through easily, managed by a web UI. But this is just one way to use the power of the board we chose. Feel free to steal this code, keep what helps, throw out what you don't like, and try something totally different. If you get somewhere interesting with your fork, let us know with a pull request to edit this section!
 
+### Community Forks
+- **[joshlevitre/DeskHog](https://github.com/joshlevitre/DeskHog)** - Adds a Pokedex card that fetches and displays random Pokemon from the PokeAPI
+
 ## Feedback
 
 PRs over issues, but if you've got any trouble, feel free to open an issue. You can also contact the maintainer, danilo@posthog.com.
